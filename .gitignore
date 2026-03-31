@@ -7,3 +7,31 @@ html-template/imports.gexf
 graph.pdf
 
 **/.DS_Store
+
+# Generated graph files - these are test artifacts and shouldn't be committed
+# But exclude the expected.dot test reference file
+*.dot
+!ImportGraphTest/expected.dot
+
+# Other generated outputs
+*.gexf
+*.html
+
+# Text output files
+*.txt
+
+# CLI test artifacts  
+--help
+--mode
+--include-*
+
+# Instance tests and other temporary files
+InstanceTest
+type-deps
+
+# Files without extensions in test directory (likely artifacts)
+ImportGraphTest/FileWithTransitiveImports
+ImportGraphTest/Used
+
+# Documentation directory (temporary exclusion)
+docs/

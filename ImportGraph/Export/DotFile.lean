@@ -18,6 +18,50 @@ private def isInModule (module : Option Name) (n : Name) := match module with
   | none => false
 
 /--
+Write an import graph directly to a file handle in ".dot" format.
+This streaming version avoids building the entire string in memory,
+which is important for large graphs (1M+ edges).
+-/
+public def writeDotGraph
+    (handle : IO.FS.Handle)
+    (graph : NameMap (Array Name))
+    (unused : NameSet := ∅)
+    (header := "import_graph")
+    (markedPackage : Option Name := none)
+    (withSorry : NameSet := ∅)
+    (directDeps : NameSet := ∅)
+    (from_ to : NameSet := ∅) : IO Unit := do
+  handle.putStrLn (s!"digraph \"{header}\" " ++ "{")
+  for (n, is) in graph do
+    let shape := if from_.contains n then "invhouse" else if to.contains n then "house" else "ellipse"
+    if markedPackage.isSome ∧ directDeps.contains n then
+      let fill := if withSorry.contains n then
+          "#ffd700"
+        else if unused.contains n then
+          "#e0e0e0"
+        else
+          "white"
+      handle.putStrLn s!"  \"{n}\" [style=filled, fontcolor=\"#4b762d\", color=\"#71b144\", fillcolor=\"{fill}\", penwidth=2, shape={shape}];"
+    else if withSorry.contains n then
+      handle.putStrLn s!"  \"{n}\" [style=filled, fillcolor=\"#ffd700\", shape={shape}];"
+    else if unused.contains n then
+      handle.putStrLn s!"  \"{n}\" [style=filled, fillcolor=\"#e0e0e0\", shape={shape}];"
+    else if isInModule markedPackage n then
+      handle.putStrLn s!"  \"{n}\" [style=filled, fillcolor=\"#96ec5b\", shape={shape}];"
+    else
+      handle.putStrLn s!"  \"{n}\" [shape={shape}];"
+    -- Then add edges
+    for i in is do
+      if isInModule markedPackage n then
+        if isInModule markedPackage i then
+          handle.putStrLn s!"  \"{i}\" -> \"{n}\" [weight=100];"
+        else
+          handle.putStrLn s!"  \"{i}\" -> \"{n}\" [penwidth=2, color=\"#71b144\"];"
+      else
+        handle.putStrLn s!"  \"{i}\" -> \"{n}\";"
+  handle.putStrLn "}"
+
+/--
 Write an import graph, represented as a `NameMap (Array Name)` to the ".dot" graph format.
 * Nodes in the `unused` set will be shaded light gray.
 * If `markedPackage` is provided:
@@ -25,6 +69,9 @@ Write an import graph, represented as a `NameMap (Array Name)` to the ".dot" gra
   * Edges from `directDeps` into the module are highlighted in green
   * Nodes in `directDeps` are marked with a green border and green text.
   * Nodes in `withSorry` are highlighted in gold.
+
+Note: For very large graphs (1M+ edges), consider using `writeDotGraph` instead
+to stream directly to a file and avoid memory issues.
 -/
 public def asDotGraph
     (graph : NameMap (Array Name))
@@ -35,7 +82,8 @@ public def asDotGraph
     (directDeps : NameSet := ∅)
     (from_ to : NameSet := ∅):
     String := Id.run do
-  let mut lines := #[s!"digraph \"{header}\" " ++ "{"]
+  -- Build string incrementally to avoid memory issues with very large graphs
+  let mut result := s!"digraph \"{header}\" " ++ "{\n"
   for (n, is) in graph do
     let shape := if from_.contains n then "invhouse" else if to.contains n then "house" else "ellipse"
     if markedPackage.isSome ∧ directDeps.contains n then
@@ -46,26 +94,26 @@ public def asDotGraph
           "#e0e0e0"
         else
           "white"
-      lines := lines.push s!"  \"{n}\" [style=filled, fontcolor=\"#4b762d\", color=\"#71b144\", fillcolor=\"{fill}\", penwidth=2, shape={shape}];"
+      result := result ++ s!"  \"{n}\" [style=filled, fontcolor=\"#4b762d\", color=\"#71b144\", fillcolor=\"{fill}\", penwidth=2, shape={shape}];\n"
     else if withSorry.contains n then
-      lines := lines.push s!"  \"{n}\" [style=filled, fillcolor=\"#ffd700\", shape={shape}];"
+      result := result ++ s!"  \"{n}\" [style=filled, fillcolor=\"#ffd700\", shape={shape}];\n"
     else if unused.contains n then
-      lines := lines.push s!"  \"{n}\" [style=filled, fillcolor=\"#e0e0e0\", shape={shape}];"
+      result := result ++ s!"  \"{n}\" [style=filled, fillcolor=\"#e0e0e0\", shape={shape}];\n"
     else if isInModule markedPackage n then
       -- mark node
-      lines := lines.push s!"  \"{n}\" [style=filled, fillcolor=\"#96ec5b\", shape={shape}];"
+      result := result ++ s!"  \"{n}\" [style=filled, fillcolor=\"#96ec5b\", shape={shape}];\n"
     else
-      lines := lines.push s!"  \"{n}\" [shape={shape}];"
+      result := result ++ s!"  \"{n}\" [shape={shape}];\n"
     -- Then add edges
     for i in is do
       if isInModule markedPackage n then
         if isInModule markedPackage i then
           -- draw the main project close together
-          lines := lines.push s!"  \"{i}\" -> \"{n}\" [weight=100];"
+          result := result ++ s!"  \"{i}\" -> \"{n}\" [weight=100];\n"
         else
           -- mark edges into the main project
-          lines := lines.push s!"  \"{i}\" -> \"{n}\" [penwidth=2, color=\"#71b144\"];"
+          result := result ++ s!"  \"{i}\" -> \"{n}\" [penwidth=2, color=\"#71b144\"];\n"
       else
-        lines := lines.push s!"  \"{i}\" -> \"{n}\";"
-  lines := lines.push "}"
-  return "\n".intercalate lines.toList
+        result := result ++ s!"  \"{i}\" -> \"{n}\";\n"
+  result := result ++ "}"
+  return result

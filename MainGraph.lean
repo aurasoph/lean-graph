@@ -4,6 +4,9 @@ public import Cli.Basic
 import ImportGraph.Export.DotFile
 import ImportGraph.Export.Gexf
 import ImportGraph.Graph.Filter
+import ImportGraph.Graph.TypeDeps
+import ImportGraph.Graph.ProofDeps
+import ImportGraph.Graph.Hierarchy
 import ImportGraph.Imports.ImportGraph
 import ImportGraph.Imports.RequiredModules
 import ImportGraph.Lean.Name
@@ -47,7 +50,41 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
   unsafe Lean.enableInitializersExecution
   let outFiles ← try unsafe withImportModules (to.map ({module := ·})) {} (trustLevel := 1024) fun env => do
     let toModule := ImportGraph.getModule to[0]!
-    let mut graph := env.importGraph
+    
+    -- Select graph mode based on --mode flag
+    let graphInit ← match args.flag? "mode" with
+      | some modeFlag =>
+        let mode := (modeFlag.as! String).toLower
+        match mode with
+        | "type-deps" | "blueprint" =>
+          let includeAux := args.hasFlag "include-aux"
+          let includeInstances := args.hasFlag "include-instances"
+          let ctx := { options := {}, fileName := "<input>", fileMap := default }
+          let state := { env }
+          Prod.fst <$> (CoreM.toIO (env.typeDepsGraph includeAux includeInstances) ctx state)
+        | "proof-deps" | "logic" =>
+          let includeAux := args.hasFlag "include-aux"
+          let includeInstances := args.hasFlag "include-instances"
+          let ctx := { options := {}, fileName := "<input>", fileMap := default }
+          let state := { env }
+          Prod.fst <$> (CoreM.toIO (env.proofDepsGraph includeAux includeInstances) ctx state)
+        | "hierarchy" | "triangles" =>
+          let ctx := { options := {}, fileName := "<input>", fileMap := default }
+          let state := { env }
+          Prod.fst <$> (CoreM.toIO (env.hierarchyGraph) ctx state)
+        | "imports" | "" =>
+          pure env.importGraph
+        | _ =>
+          -- Invalid mode, fallback to imports
+          pure env.importGraph
+      | none => pure env.importGraph
+    
+    let mut graph := graphInit
+    let modulesWithSorry := if args.hasFlag "mark-sorry" then ImportGraph.allModulesWithSorry env else ∅
+
+    if let Option.some f := from? then
+      graph := graph.downstreamOf (NameSet.ofArray f)
+    
     let unused ←
       match args.flag? "to" with
       | some _ =>
@@ -58,10 +95,6 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
         let used := used.foldl (init := init) (fun s _ t => s ∪ t)
         pure <| graph.foldl (fun acc n _ => if used.contains n then acc else acc.insert n) NameSet.empty
       | none => pure NameSet.empty
-    let modulesWithSorry := if args.hasFlag "mark-sorry" then ImportGraph.allModulesWithSorry env else ∅
-
-    if let Option.some f := from? then
-      graph := graph.downstreamOf (NameSet.ofArray f)
     let includeLean := args.hasFlag "include-lean"
     let includeStd := args.hasFlag "include-std" || includeLean
     let includeDeps := args.hasFlag "include-deps" || includeStd
@@ -178,6 +211,9 @@ def graph : Cmd := `[Cli|
    If you are working in a downstream project, use `lake exe graph --to MyProject`."
 
   FLAGS:
+    "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'."
+    "include-aux";             "Include auxiliary definitions (recursors, internal names, etc.). Default: exclude."
+    "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
     "show-transitive";         "Show transitively redundant edges."
     "to" : Array ModuleName;   "Only show the upstream imports of the specified modules."
     "from" : Array ModuleName; "Only show the downstream dependencies of the specified modules."
