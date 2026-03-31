@@ -161,7 +161,7 @@ Parameters:
 - `includeInstances`: If `false`, filter out typeclass instances
 -/
 public def proofDepsGraph (env : Environment) 
-    (includeAux : Bool) (includeInstances : Bool) : CoreM (NameMap (Array Name)) := do
+    (includeAux : Bool := false) (includeInstances : Bool := false) : CoreM (NameMap (Array Name)) := do
   let mut graph : NameMap (Array Name) := {}
   
   for (name, info) in env.constants.toList do

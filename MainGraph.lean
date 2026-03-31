@@ -52,7 +52,8 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
     let toModule := ImportGraph.getModule to[0]!
     
     -- Select graph mode based on --mode flag
-    let graphInit ← match args.flag? "mode" with
+    -- Track whether we're in constant-level mode (vs module-level)
+    let (graphInit, isConstantLevel) ← match args.flag? "mode" with
       | some modeFlag =>
         let mode := (modeFlag.as! String).toLower
         match mode with
@@ -61,23 +62,26 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
           let includeInstances := args.hasFlag "include-instances"
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          Prod.fst <$> (CoreM.toIO (env.typeDepsGraph includeAux includeInstances) ctx state)
+          let g ← Prod.fst <$> (CoreM.toIO (env.typeDepsGraph includeAux includeInstances) ctx state)
+          pure (g, true)
         | "proof-deps" | "logic" =>
           let includeAux := args.hasFlag "include-aux"
           let includeInstances := args.hasFlag "include-instances"
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          Prod.fst <$> (CoreM.toIO (env.proofDepsGraph includeAux includeInstances) ctx state)
+          let g ← Prod.fst <$> (CoreM.toIO (env.proofDepsGraph includeAux includeInstances) ctx state)
+          pure (g, true)
         | "hierarchy" | "triangles" =>
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          Prod.fst <$> (CoreM.toIO (env.hierarchyGraph) ctx state)
+          let g ← Prod.fst <$> (CoreM.toIO (env.hierarchyGraph) ctx state)
+          pure (g, true)
         | "imports" | "" =>
-          pure env.importGraph
+          pure (env.importGraph, false)
         | _ =>
           -- Invalid mode, fallback to imports
-          pure env.importGraph
-      | none => pure env.importGraph
+          pure (env.importGraph, false)
+      | none => pure (env.importGraph, false)
     
     let mut graph := graphInit
     let modulesWithSorry := if args.hasFlag "mark-sorry" then ImportGraph.allModulesWithSorry env else ∅
@@ -103,16 +107,32 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
     -- `--include-direct`, but not included with `--include-deps`.
     let includeDirect := args.hasFlag "include-direct"
 
+    -- Helper to get the module that defines a constant (for constant-level graphs)
+    let getDefiningModule (n : Name) : Name :=
+      match env.getModuleIdxFor? n with
+      | some idx => env.header.moduleNames[idx.toNat]!
+      | none => n -- fallback: constant not in imported modules, use name as-is
+
+    -- Helper to check if a name belongs to the target package
+    -- For module-level graphs: check if name has toModule as prefix
+    -- For constant-level graphs: look up defining module, check if IT has toModule as prefix
+    let belongsToPackage (n : Name) : Bool :=
+      if isConstantLevel then
+        let defModule := getDefiningModule n
+        toModule.isPrefixOf defModule
+      else
+        toModule.isPrefixOf n
+
     -- `directDeps` contains files which are not in the package
     -- but directly imported by a file in the package
     let directDeps : NameSet := graph.foldl (init := .empty) (fun acc n deps =>
-      if toModule.isPrefixOf n then
-        deps.filter (!toModule.isPrefixOf ·) |>.foldl (init := acc) NameSet.insert
+      if belongsToPackage n then
+        deps.filter (!belongsToPackage ·) |>.foldl (init := acc) NameSet.insert
       else
         acc)
 
     let filter (n : Name) : Bool :=
-      toModule.isPrefixOf n ||
+      belongsToPackage n ||
       bif isPrefixOf `Std n then includeStd else
       bif isPrefixOf `Lean n || isPrefixOf `Init n then includeLean else
       includeDeps
