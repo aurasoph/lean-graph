@@ -161,21 +161,31 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
 
     let markedPackage : Option Name := if args.hasFlag "mark-package" then toModule else none
 
-    -- Create all output files that are requested
-    let mut outFiles : Std.HashMap String String := {}
+    -- Write DOT files directly to avoid building massive strings in memory
+    -- This must be done inside withImportModules while we have access to the graph data
     if extensions.contains "dot" then
-      let dotFile := asDotGraph graph (unused := unused) (markedPackage := markedPackage)
-        (directDeps := directDeps)
-        (withSorry := modulesWithSorry)
-        (to := NameSet.ofArray to) (from_ := NameSet.ofArray (from?.getD #[]))
-      outFiles := outFiles.insert "dot" dotFile
+      let dotOutputs := match args.variableArgsAs! String with
+        | #[] => #["import_graph.dot"]
+        | outputs => outputs.filter (fun o =>
+            match (o : FilePath).extension with
+            | none | some "dot" => true
+            | _ => false)
+      for output in dotOutputs do
+        IO.FS.withFile output .write fun handle =>
+          writeDotGraph handle graph (unused := unused) (markedPackage := markedPackage)
+            (directDeps := directDeps)
+            (withSorry := modulesWithSorry)
+            (to := NameSet.ofArray to) (from_ := NameSet.ofArray (from?.getD #[]))
+
+    -- Create GEXF output (needed for HTML embedding, must be returned as string)
+    let mut outFiles : Std.HashMap String String := {}
     if extensions.contains "gexf" then
-      -- filter out the top node as it makes the graph less pretty
       let graph₂ := match args.flag? "to" with
         | none => graph.filter (fun n _ => ! if to.contains `Mathlib then #[`Mathlib, `Mathlib.Tactic].contains n else to.contains n)
         | some _ => graph
       let gexfFile := Graph.toGexf graph₂ toModule env
       outFiles := outFiles.insert "gexf" gexfFile
+    
     return outFiles
 
   catch err =>
@@ -184,13 +194,14 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
       s!"try if `lake build {" ".intercalate (to.toList.map Name.toString)}` fixes the issue"
     throw err
 
+  -- DOT files have already been written inside withImportModules
+  -- Here we only handle GEXF, HTML, and other formats (png, svg, etc.)
   match args.variableArgsAs! String with
-  | #[] => writeFile "import_graph.dot" (outFiles["dot"]!)
+  | #[] => pure ()  -- DOT file already written
   | outputs => for o in outputs do
      let fp : FilePath := o
      match fp.extension with
-     | none
-     | "dot" => writeFile fp (outFiles["dot"]!)
+     | none | "dot" => pure ()  -- DOT files already written
      | "gexf" => IO.FS.writeFile fp (outFiles["gexf"]!)
      | "html" =>
         let gexfFile := (outFiles["gexf"]!)
@@ -215,7 +226,12 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
           |>.replace "<title>import graph</title>" s!"<title>import graph for {toFormatted}</title>"
         IO.FS.writeFile fp html
      | some ext => try
-        _ ← IO.Process.output { cmd := "dot", args := #["-T" ++ ext, "-o", o] } outFiles["dot"]!
+        -- For other formats (png, svg, etc.), we need to pipe through graphviz
+        -- Read the DOT file that was already written and pipe it to graphviz
+        -- Find the corresponding .dot file
+        let dotPath := fp.withExtension "dot"
+        let dotContent ← IO.FS.readFile dotPath
+        _ ← IO.Process.output { cmd := "dot", args := #["-T" ++ ext, "-o", o] } dotContent
       catch ex =>
         IO.eprintln s!"Error occurred while writing out {fp}."
         IO.eprintln s!"Make sure you have `graphviz` installed and the file is writable."

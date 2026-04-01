@@ -65,6 +65,19 @@ public def getParentDeclaration (name : Name) : Name :=
       name
   | _ => name
 
+/--
+Heuristic to detect if a name is likely a typeclass instance.
+Used as fallback since Meta.isInstance doesn't work with importModules
+(the instance extension state isn't populated when loading compiled modules).
+
+Detection pattern:
+- Name starts with "inst" (Lean's convention: instBEq, instInhabited, etc.)
+- OR name contains ".inst" (namespaced: Foo.instBar)
+-/
+private def isLikelyInstance (name : Name) : Bool :=
+  let s := name.toString
+  s.startsWith "inst" || (s.splitOn ".inst").length > 1
+
 /-- Check if a constant should be included in dependency graphs. -/
 public def shouldIncludeConstant (env : Environment) (name : Name) 
     (includeAux : Bool) (includeInstances : Bool) : CoreM Bool := do
@@ -81,9 +94,13 @@ public def shouldIncludeConstant (env : Environment) (name : Name)
     return false
   
   -- Check for typeclass instances
+  -- Note: Meta.isInstance doesn't work with importModules (extension state not loaded),
+  -- so we use a heuristic based on Lean's instance naming convention as fallback.
   if !includeInstances then
     let isInst ← Meta.isInstance name
-    if isInst then return false
+    -- If Meta.isInstance returns false, try heuristic (it always returns false with importModules)
+    if isInst || isLikelyInstance name then 
+      return false
   
   return true
 
