@@ -78,9 +78,8 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
           pure (g, true)
         | "imports" | "" =>
           pure (env.importGraph, false)
-        | _ =>
-          -- Invalid mode, fallback to imports
-          pure (env.importGraph, false)
+        | other =>
+          throw <| IO.userError s!"Unknown graph mode: '{other}'. Valid modes: imports, type-deps, proof-deps, hierarchy"
       | none => pure (env.importGraph, false)
     
     let mut graph := graphInit
