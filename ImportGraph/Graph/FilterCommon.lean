@@ -31,11 +31,15 @@ Filtered patterns:
 - `.ctorIdx`, `_ctorIdx` - runtime constructor indices
 -/
 public def isMechanicalDeclaration (name : Name) : Bool :=
-  let s := name.toString
-  s.endsWith ".eq_def" || 
-  ((s.splitOn ".eq_").length > 1 && s.back.isDigit) ||
-  s.endsWith ".sizeOf_spec" ||
-  s.endsWith ".ctorIdx" || s.endsWith "_ctorIdx"
+  match name with
+  | .str _ "eq_def" => true
+  | .str _ "sizeOf_spec" => true
+  | .str _ "ctorIdx" => true
+  | .str _ suffix => 
+    -- Check for .eq_N pattern (e.g., eq_1, eq_2) or _ctorIdx
+    (suffix.startsWith "eq_" && (suffix.drop 3).all Char.isDigit && suffix.length > 3) ||
+    suffix == "_ctorIdx"
+  | _ => false
 
 /--
 Get the "parent" declaration for a mechanical/auto-generated declaration.
@@ -48,20 +52,18 @@ Examples:
 - `Color.ctorIdx` → `Color`
 -/
 public def getParentDeclaration (name : Name) : Name :=
-  let s := name.toString
-  if s.endsWith ".eq_def" then
-    (s.dropEnd ".eq_def".length).toString.toName
-  else if (s.splitOn ".eq_").length > 1 && s.back.isDigit then
-    let parts := s.splitOn ".eq_"
-    if parts.length >= 2 then parts[0]!.toName else name
-  else if s.endsWith ".sizeOf_spec" then
-    (s.dropEnd ".sizeOf_spec".length).toString.toName
-  else if s.endsWith ".ctorIdx" then
-    (s.dropEnd ".ctorIdx".length).toString.toName
-  else if s.endsWith "_ctorIdx" then
-    (s.dropEnd "_ctorIdx".length).toString.toName
-  else
-    name
+  match name with
+  | .str parent "eq_def" => parent
+  | .str parent "sizeOf_spec" => parent
+  | .str parent "ctorIdx" => parent
+  | .str parent "_ctorIdx" => parent
+  | .str parent suffix =>
+    -- Handle .eq_N pattern (e.g., eq_1, eq_2)
+    if suffix.startsWith "eq_" && (suffix.drop 3).all Char.isDigit && suffix.length > 3 then
+      parent
+    else
+      name
+  | _ => name
 
 /-- Check if a constant should be included in dependency graphs. -/
 public def shouldIncludeConstant (env : Environment) (name : Name) 
