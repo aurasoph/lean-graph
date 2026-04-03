@@ -18,6 +18,83 @@ private def isInModule (module : Option Name) (n : Name) := match module with
   | none => false
 
 /--
+<<<<<<< HEAD
+=======
+Write an import graph directly to a file handle in ".dot" format.
+This streaming version avoids building the entire string in memory,
+which is important for large graphs (1M+ edges).
+-/
+public def writeDotGraph
+    (handle : IO.FS.Handle)
+    (graph : NameMap (Array Name))
+    (unused : NameSet := ∅)
+    (header := "import_graph")
+    (markedPackage : Option Name := none)
+    (withSorry : NameSet := ∅)
+    (directDeps : NameSet := ∅)
+    (from_ to : NameSet := ∅) : IO Unit := do
+  let opening := s!"digraph \"{header}\" " ++ "{"
+  handle.putStrLn opening
+  
+  -- Build all content in a single large buffer, then write in one go
+  -- This is more efficient than thousands of small putStr calls
+  let mut buffer : String := ""
+  let mut lineCount := 0
+  let mut partCount := 0
+  
+  for (n, is) in graph do
+    let shape := if from_.contains n then "invhouse" else if to.contains n then "house" else "ellipse"
+    let nodeLine := if markedPackage.isSome ∧ directDeps.contains n then
+      let fill := if withSorry.contains n then
+          "#ffd700"
+        else if unused.contains n then
+          "#e0e0e0"
+        else
+          "white"
+      s!"  \"{n}\" [style=filled, fontcolor=\"#4b762d\", color=\"#71b144\", fillcolor=\"{fill}\", penwidth=2, shape={shape}];\n"
+    else if withSorry.contains n then
+      s!"  \"{n}\" [style=filled, fillcolor=\"#ffd700\", shape={shape}];\n"
+    else if unused.contains n then
+      s!"  \"{n}\" [style=filled, fillcolor=\"#e0e0e0\", shape={shape}];\n"
+    else if isInModule markedPackage n then
+      s!"  \"{n}\" [style=filled, fillcolor=\"#96ec5b\", shape={shape}];\n"
+    else
+      s!"  \"{n}\" [shape={shape}];\n"
+    
+    buffer := buffer ++ nodeLine
+    
+    -- Then add edges
+    for i in is do
+      let edgeLine := if isInModule markedPackage n then
+        if isInModule markedPackage i then
+          s!"  \"{i}\" -> \"{n}\" [weight=100];\n"
+        else
+          s!"  \"{i}\" -> \"{n}\" [penwidth=2, color=\"#71b144\"];\n"
+      else
+        s!"  \"{i}\" -> \"{n}\";\n"
+      buffer := buffer ++ edgeLine
+    
+    lineCount := lineCount + is.size + 1
+    
+    -- Write buffer when it reaches ~10MB to prevent unbounded memory growth
+    if buffer.length > 10_000_000 then
+      handle.putStr buffer
+      partCount := partCount + 1
+      if partCount % 5 == 0 then
+        IO.eprintln s!"[DEBUG-WRITE] Wrote {partCount} parts ({partCount * 10}MB+ so far)"
+      _ ← handle.flush
+      buffer := ""
+  
+  -- Write any remaining buffered content
+  if buffer.length > 0 then
+    handle.putStr buffer
+    _ ← handle.flush
+  
+  handle.putStrLn "}"
+  _ ← handle.flush
+
+/--
+>>>>>>> 610c170 (fixed I/O bottlenecks)
 Write an import graph, represented as a `NameMap (Array Name)` to the ".dot" graph format.
 * Nodes in the `unused` set will be shaded light gray.
 * If `markedPackage` is provided:

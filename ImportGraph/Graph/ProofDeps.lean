@@ -25,38 +25,81 @@ For definitions: dependencies from the definition body
 
 namespace Lean.Environment
 
--- Chunked version of applyTransitiveClosure to handle large dependency arrays
+-- Process dependency arrays without accumulating in large intermediate arrays
 private def applyTransitiveClosureChunked (env : Environment) (deps : Array Name) 
     (includeAux : Bool) (includeInstances : Bool) : CoreM (Array Name) := do
   let mut result : Array Name := #[]
   let mut seen : NameSet := {}
   
-  -- Process dependencies in smaller batches to avoid stack buildup
-  let chunkSize := 50  -- Small chunks to prevent recursion depth issues
   let depsCount := deps.size
+  let mut totalProcessed := 0
   
-  for startIdx in List.range (depsCount / chunkSize + 1) do
-    let start := startIdx * chunkSize
-    let endIdx := min (start + chunkSize) depsCount
+  -- Process all dependencies, but don't keep large intermediate collections
+  for i in List.range depsCount do
+    let dep := deps[i]!
+    totalProcessed := totalProcessed + 1
     
-    for i in List.range (endIdx - start) do
-      if start + i >= depsCount then break
-      let dep := deps[start + i]!
-      
-      let shouldInclude ← shouldIncludeConstant env dep includeAux includeInstances
-      if shouldInclude then
-        if !seen.contains dep then
-          result := result.push dep
-          seen := seen.insert dep
-      else if isMechanicalDeclaration dep then
-        let parent := getParentDeclaration dep
-        if parent != dep && env.contains parent then
-          let parentOk ← shouldIncludeConstant env parent includeAux includeInstances
-          if parentOk && !seen.contains parent then
-            result := result.push parent
-            seen := seen.insert parent
+    if totalProcessed % 50000 == 0 then
+      IO.eprintln s!"[DEBUG-CHUNKED] Processed {totalProcessed}/{depsCount} dependencies"
+    
+    let shouldInclude ← shouldIncludeConstant env dep includeAux includeInstances
+    if shouldInclude then
+      if !seen.contains dep then
+        result := result.push dep
+        seen := seen.insert dep
+    else if isMechanicalDeclaration dep then
+      let parent := getParentDeclaration dep
+      if parent != dep && env.contains parent then
+        let parentOk ← shouldIncludeConstant env parent includeAux includeInstances
+        if parentOk && !seen.contains parent then
+          result := result.push parent
+          seen := seen.insert parent
   
   return result
+
+-- Stream proof-deps graph directly to file handle without accumulating entire graph in memory
+public def proofDepsGraphStreaming (env : Environment) 
+    (handle : IO.FS.Handle)
+    (includeAux : Bool := false) (includeInstances : Bool := false) : CoreM Unit := do
+  let mut processedCount := 0
+  let mut skippedCount := 0
+  let mut edgeCount := 0
+  let allConstants := env.constants.toList
+  let totalCount := allConstants.length
+  
+  IO.eprintln "Starting proof-deps graph generation (streaming)..."
+  
+  for (name, info) in allConstants do
+    processedCount := processedCount + 1
+    
+    -- Print progress every 5000 constants
+    if processedCount % 5000 == 0 then
+      IO.eprintln s!"Processing constant {processedCount}/{totalCount}: {name}"
+    
+    let shouldInclude ← shouldIncludeConstant env name includeAux includeInstances
+    if !shouldInclude then 
+      skippedCount := skippedCount + 1
+      continue
+    
+    let deps : Array Name := match info with
+      | .thmInfo val => val.value.getUsedConstants
+      | .defnInfo val => val.value.getUsedConstants
+      | _ => #[]
+    
+    if deps.isEmpty then continue
+    
+    let processedDeps ← applyTransitiveClosureChunked env deps includeAux includeInstances
+    
+    -- Write edges directly to file as we discover them
+    for dep in processedDeps do
+      handle.putStrLn s!"  \"{dep}\" -> \"{name}\";"
+      edgeCount := edgeCount + 1
+      
+      -- Flush every 1000 edges
+      if edgeCount % 1000 == 0 then
+        _ ← handle.flush
+  
+  IO.eprintln s!"Completed: {processedCount} constants iterated, {skippedCount} skipped, {edgeCount} edges written"
 
 /--
 Build a proof dependencies graph from the Lean environment.
@@ -74,32 +117,39 @@ public def proofDepsGraph (env : Environment)
     (includeAux : Bool := false) (includeInstances : Bool := false) : CoreM (NameMap (Array Name)) := do
   let mut graph : NameMap (Array Name) := {}
   let mut processedCount := 0
+  let mut skippedCount := 0
+  
+  IO.eprintln "Starting proof-deps graph generation..."
   
   for (name, info) in env.constants.toList do
+    processedCount := processedCount + 1
+    
+    -- Print progress every 5000 constants
+    if processedCount % 5000 == 0 then
+      IO.eprintln s!"Processing constant {processedCount}: {name}"
+    
     let shouldInclude ← shouldIncludeConstant env name includeAux includeInstances
-    if !shouldInclude then continue
+    if !shouldInclude then 
+      skippedCount := skippedCount + 1
+      continue
     
     match info with
     | .thmInfo val =>
       let deps := val.value.getUsedConstants
-      -- Process dependencies in smaller chunks to avoid stack buildup
       let processedDeps ← applyTransitiveClosureChunked env deps includeAux includeInstances
-      graph := graph.insert name processedDeps
+      if processedDeps.size > 0 then
+        graph := graph.insert name processedDeps
       
     | .defnInfo val =>
       let deps := val.value.getUsedConstants
-      -- Process dependencies in smaller chunks to avoid stack buildup  
       let processedDeps ← applyTransitiveClosureChunked env deps includeAux includeInstances
-      graph := graph.insert name processedDeps
+      if processedDeps.size > 0 then
+        graph := graph.insert name processedDeps
       
     | .recInfo _ | .axiomInfo _ | .inductInfo _ | .ctorInfo _ | .opaqueInfo _ | .quotInfo _ =>
       continue
-    
-    processedCount := processedCount + 1
-    -- Progress indicator and yield opportunity
-    if processedCount % 1000 == 0 then
-      IO.eprintln s!"Processed {processedCount} constants..."
   
+  IO.eprintln s!"Completed: {processedCount} constants iterated, {skippedCount} skipped"
   return graph
 
 end Lean.Environment
