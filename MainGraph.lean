@@ -156,7 +156,9 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
         isPrefixOf `Mathlib.Mathport n ∨
         isPrefixOf `Mathlib.Util n)
       graph := graph.filterGraph filterMathlibMeta (replacement := `«Mathlib.Tactics»)
-    if !args.hasFlag "show-transitive" then
+    if !args.hasFlag "show-transitive" && !(match args.flag? "mode" with
+      | some m => (m.as! String).toLower ∈ ["proof-deps", "logic"]
+      | none => false) then
       graph := graph.transitiveReduction
 
     let markedPackage : Option Name := if args.hasFlag "mark-package" then toModule else none

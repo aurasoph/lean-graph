@@ -95,11 +95,10 @@ public def shouldIncludeConstant (env : Environment) (name : Name)
   
   -- Check for typeclass instances
   -- Note: Meta.isInstance doesn't work with importModules (extension state not loaded),
-  -- so we use a heuristic based on Lean's instance naming convention as fallback.
+  -- so we rely on heuristic based on Lean's instance naming convention.
+  -- Removed Meta.isInstance call since it hangs on certain constants and always returns false anyway.
   if !includeInstances then
-    let isInst ← Meta.isInstance name
-    -- If Meta.isInstance returns false, try heuristic (it always returns false with importModules)
-    if isInst || isLikelyInstance name then 
+    if isLikelyInstance name then 
       return false
   
   return true
