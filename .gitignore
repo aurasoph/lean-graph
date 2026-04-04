@@ -7,3 +7,35 @@ html-template/imports.gexf
 graph.pdf
 
 **/.DS_Store
+<<<<<<< HEAD
+=======
+
+# Generated graph files - exclude test artifacts
+# But allow the Mathlib graphs in mathlib_graphs/ and the test reference file
+*.dot
+!mathlib_graphs/*.dot
+!ImportGraphTest/expected.dot
+
+# Other generated outputs
+*.gexf
+*.html
+
+# Text output files
+*.txt
+
+# CLI test artifacts  
+--help
+--mode
+--include-*
+
+# Instance tests and other temporary files
+InstanceTest
+type-deps
+
+# Files without extensions in test directory (likely artifacts)
+ImportGraphTest/FileWithTransitiveImports
+ImportGraphTest/Used
+
+# Documentation directory (intentionally excluded - working notes)
+docs/
+>>>>>>> b34312c (Add Mathlib dependency graphs with LFS for large files)
