@@ -8,9 +8,10 @@ graph.pdf
 
 **/.DS_Store
 
-# Generated graph files - these are test artifacts and shouldn't be committed
-# But exclude the expected.dot test reference file
+# Generated graph files - exclude test artifacts
+# But allow the Mathlib graphs in mathlib_graphs/ and the test reference file
 *.dot
+!mathlib_graphs/*.dot
 !ImportGraphTest/expected.dot
 
 # Other generated outputs
@@ -33,5 +34,5 @@ type-deps
 ImportGraphTest/FileWithTransitiveImports
 ImportGraphTest/Used
 
-# Documentation directory (temporary exclusion)
+# Documentation directory (intentionally excluded - working notes)
 docs/

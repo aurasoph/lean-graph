@@ -1,130 +1,140 @@
-# importGraph
+# Mathlib4 Dependency Graphs
 
-A simple tool to create import graphs of lake packages.
+This repository contains complete dependency graphs for [Mathlib4](https://github.com/leanprover-community/mathlib4), generated using the [import-graph](https://github.com/leanprover-community/import-graph) tool.
 
+For documentation on the import-graph tool itself, see the [original repository](https://github.com/leanprover-community/import-graph).
 
-## Requirements
+## Graph Files
 
-For creating different output formats than `.dot` (for example to create a `.pdf` file), you should have [`graphviz`](https://graphviz.org/) installed.
+All graphs are located in the `mathlib_graphs/` directory:
 
-## Usage
+| File | Size | Nodes/Edges | Description |
+|------|------|-------------|-------------|
+| **mathlib_imports.dot** | 3.1M | 37,415 modules | Module-level import dependencies |
+| **mathlib_hierarchy.dot** | 160K | 2,666 typeclasses | Typeclass/structure inheritance hierarchy |
+| **mathlib_type_deps.dot** | 192M | ~3M edges | Type signature dependencies |
+| **mathlib_proof_deps.dot** | 607M | ~9.5M edges | Proof body dependencies |
 
-If you are using mathlib, the tool will already be available. If not, see installation notes below.
+## What's Included
 
-Once available in your project, you can create import graphs with
+These graphs represent **~380,000 theorems, definitions, and structures** from Mathlib4, including:
+
+- ✅ All user-written theorems, lemmas, and definitions
+- ✅ Structure and inductive type definitions  
+- ✅ Core Lean foundations (Classical.em, funext, propext, etc.)
+- ❌ Typeclass instances (filtered for cleaner analysis)
+- ❌ Auto-generated declarations (.eq_def, .sizeOf_spec, etc.)
+- ❌ Compiler-internal artifacts
+
+All graphs were generated with the `--include-lean` flag to include Core Lean mathematical foundations.
+
+## Graph Types Explained
+
+### 1. Imports Graph (`mathlib_imports.dot`)
+**Module-level import relationships**
+
+- **Nodes**: Lean modules (e.g., `Mathlib.Data.List.Basic`)
+- **Edges**: Module A → Module B means "B imports A"
+- **Use cases**: Understanding project structure, finding circular dependencies
+
+### 2. Hierarchy Graph (`mathlib_hierarchy.dot`)
+**Typeclass and structure inheritance**
+
+- **Nodes**: Structures/classes that extend other structures (e.g., Group, Ring, Field)
+- **Edges**: Parent → Child (e.g., `Monoid → Group` means "Group extends Monoid")
+- **Use cases**: Understanding algebraic structure relationships, visualizing the typeclass hierarchy
+- **Visualization**: Small enough to render as a graph!
+
+### 3. Type-Deps Graph (`mathlib_type_deps.dot`)
+**Type signature dependencies**
+
+- **Nodes**: All constants (theorems, definitions, types, structures)
+- **Edges**: Used → User (if theorem B's *type signature* mentions constant A)
+- **Example**: `Nat → Nat.add_comm` (the theorem's type mentions Nat)
+- **Use cases**: Understanding type-level dependencies, analyzing which types/interfaces are used together
+
+### 4. Proof-Deps Graph (`mathlib_proof_deps.dot`)
+**Proof body dependencies**
+
+- **Nodes**: All constants (theorems, definitions, structures)
+- **Edges**: Used → User (if theorem B's *proof* uses theorem A)
+- **Example**: `Nat.add_comm → some_theorem` (the proof applies Nat.add_comm)
+- **Use cases**: ML training on proof structure, finding fundamental theorems, analyzing proof dependencies
+
+## Size Considerations
+
+The **hierarchy** and **imports** graphs are small enough to visualize directly with Graphviz:
 
 ```bash
-lake exe graph
+dot -Tpng mathlib_graphs/mathlib_hierarchy.dot -o hierarchy.png
+dot -Tsvg mathlib_graphs/mathlib_imports.dot -o imports.svg
 ```
 
-A typical command is
+The **type-deps** and **proof-deps** graphs are massive (192M and 607M). For these:
+- Extract subgraphs around specific theorems/modules
+- Compute statistics (degree distribution, centrality measures)
+- Use specialized graph analysis tools (NetworkX, Neo4j, etc.)
+
+## Generation Details
+
+Graphs were generated from Mathlib4 using:
 
 ```bash
-lake exe graph --to MyModule my_graph.pdf
-```
-where `MyModule` follows the same module naming you would use to `import` it in lean. See `lake exe graph --help` for more options.
-
-You can specify multiple sources and targets e.g. as
-```bash
-lake exe graph --from MyModule1,MyModule2 --to MyModule3,MyModule4 my_graph.pdf
+lake exe graph --mode imports --to Mathlib --include-lean mathlib_imports.dot
+lake exe graph --mode hierarchy --to Mathlib --include-lean mathlib_hierarchy.dot
+lake exe graph --mode type-deps --to Mathlib --include-lean mathlib_type_deps.dot
+lake exe graph --mode proof-deps --to Mathlib --include-lean mathlib_proof_deps.dot
 ```
 
-### Troubleshoot
+Generation environment:
+- **Mathlib4 version**: [commit hash from lake-manifest.json]
+- **Lean version**: v4.29.0
+- **Generated**: April 3-4, 2026
 
-* make sure to `lake build` your project (or the specified `--to` module) before using `lake exe graph`!
+## File Format
 
-### Json
+All files use the [DOT graph description language](https://graphviz.org/doc/info/lang.html) (Graphviz format):
 
-To create a Json file, you can use `.xdot_json` as output type:
-
-```bash
-lake exe graph my_graph.xdot_json
+```dot
+digraph "import_graph" {
+  "node_name" [attributes];
+  "source" -> "target";
+}
 ```
 
-### HTML
+This is a text-based format that can be:
+- Parsed programmatically
+- Visualized with Graphviz tools
+- Analyzed with graph libraries (NetworkX, igraph, etc.)
+- Converted to other formats (GraphML, JSON, etc.)
 
-```
-lake exe graph my_graph.html
-```
+## Use Cases
 
-creates a stand-alone HTML file visualising the import structure.
+### For Machine Learning
+- **Proof-deps graph**: Training theorem provers, analyzing proof strategies
+- **Type-deps graph**: Learning type system patterns, predicting types
+- Focus on mathematical reasoning (instances and boilerplate already filtered)
 
-## Commands
+### For Analysis
+- **Imports graph**: Build system optimization, module organization
+- **Hierarchy graph**: Understanding Lean's algebraic structure design
+- **Proof-deps graph**: Finding most fundamental theorems (high in-degree)
+- **Type-deps graph**: Understanding compositional structure
 
-There are a few commands implemented, which help you analysing the imports of a file. These are accessible by adding `import ImportGraph.Tools` to your lean file.
+### For Research
+- Studying mathematical dependencies in formal mathematics
+- Analyzing proof complexity and structure
+- Understanding the foundations of Mathlib
 
-* `#redundant_imports`: lists any transitively redundant imports in the current module.
-* `#min_imports`: attempts to construct a minimal set of imports for the declarations
-  in the current file.
-  (Must be run at the end of the file. Tactics and macros may result in incorrect output.)
-* `#find_home decl`: suggests files higher up the import hierarchy to which `decl` could be moved.
-* `#import_diff foo bar ...` computes the new transitive imports that are added to a given file when
-  modules `foo, bar, ...` are added to the set of imports of the file.
+## License
 
-## Source-File-Based Import Analysis
+The graphs themselves are derived from [Mathlib4](https://github.com/leanprover-community/mathlib4), which is licensed under Apache 2.0.
 
-The `ImportGraph.Imports.FromSource` module provides functions for analyzing imports by parsing source files directly, without requiring a built environment. This is useful for scripts, linters, and tools that need to analyze imports quickly or on files that haven't been compiled yet.
+The generation tool is [import-graph](https://github.com/leanprover-community/import-graph), also Apache 2.0.
 
-### Functions
+## Questions or Issues?
 
-Add `import ImportGraph.Imports.FromSource` to your Lean script to access:
-
-* `findImportsFromSource (path : System.FilePath) : IO (Array Name)`: Parse direct imports from a single file.
-* `findTransitiveImportsFromSource (startPath : System.FilePath) (rootFilter : Option Name := none) : IO NameSet`: Compute the transitive closure of imports from source files.
-
-### Example
-
-```lean
-import ImportGraph.Imports.FromSource
-
--- Get all transitive Mathlib imports from a file
-#eval do
-  let imports ← findTransitiveImportsFromSource "Mathlib/Algebra/Ring/Basic.lean" (some `Mathlib)
-  IO.println s!"Transitive Mathlib imports: {imports.toArray.qsort Name.lt}"
-```
-
-## Other executables
-
-`lake exe unused_transitive_imports m1 m2 ...`
-
-For each specified module `m`, prints those `n` from the argument list which are imported, but transitively unused by `m`.
-
-## Installation
-
-The installation works exactly like for any [Lake package](https://reservoir.lean-lang.org/),
-see [Lake docs](https://github.com/leanprover/lean4/tree/master/src/lake#supported-sources).
-
-*This only relevant if your project does not already require `importGraph` through another lake package (e.g. mathlib). If it does, do not follow these instructions; instead just use the tool with `lake exe graph`!*
-
-You can import this in any lean projects by the following line to your `lakefile.lean`:
-
-```lean
-require "leanprover-community" / "importGraph" @ git "main"
-```
-
-or, if you have a `lakefile.toml`, it would be
-
-```toml
-[[require]]
-name = "importGraph"
-source = "leanprover-community"
-rev = "main"
-```
-
-Then, you might need to call `lake update -R importGraph` in your project.
-
-## Contribution
-
-Please open PRs/Issues if you have troubles or would like to contribute new features!
-
-## Credits
-
-The main tool has been extracted from [mathlib](https://github.com/leanprover-community/mathlib4),
-originally written by Kim Morrison and other mathlib contributors.
-
-The HTML visualisation has been incorporated from
-[a project by Eric Wieser](https://github.com/eric-wieser/mathlib-import-graph).
-
-### Maintainers
-
-Primarily maintained by [Jon Eugster](https://leanprover.zulipchat.com/#narrow/dm/385895-Jon-Eugster), Kim Morrison, and the wider leanprover community.
+For questions about:
+- **The graphs in this repository**: Open an issue here
+- **The import-graph tool**: See the [original repository](https://github.com/leanprover-community/import-graph)
+- **Mathlib itself**: See [Mathlib4 repository](https://github.com/leanprover-community/mathlib4)
