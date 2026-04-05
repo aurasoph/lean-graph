@@ -8,12 +8,14 @@ For documentation on the import-graph tool itself, see the [original repository]
 
 All graphs are located in the `mathlib_graphs/` directory:
 
-| File | Size | Nodes/Edges | Description |
-|------|------|-------------|-------------|
-| **mathlib_imports.dot** | 3.1M | 37,415 modules | Module-level import dependencies |
-| **mathlib_hierarchy.dot** | 160K | 2,666 typeclasses | Typeclass/structure inheritance hierarchy |
-| **mathlib_type_deps.dot** | 192M | ~3M edges | Type signature dependencies |
-| **mathlib_proof_deps.dot** | 607M | ~9.5M edges | Proof body dependencies |
+| File | Size | Nodes | Edges | Description |
+|------|------|-------|-------|-------------|
+| **mathlib_imports.dot** | 3.1M | 10,283 | 27,129 | Module-level import dependencies |
+| **mathlib_hierarchy.dot** | 160K | 1,086 | 1,578 | Typeclass/structure inheritance hierarchy |
+| **mathlib_type_deps.dot** | 137M | 373,541 | 1,737,466 | Type signature dependencies |
+| **mathlib_proof_deps.dot** | 437M | 349,092 | 6,613,804 | Proof body dependencies |
+
+**Note:** Type-deps and proof-deps graphs filter out auto-generated declarations (constructors, field accessors, recursors, etc.) to include only human-written mathematics. This represents ~373K of Mathlib's ~395K theorems and definitions.
 
 
 ## Graph Types Explained
@@ -33,16 +35,19 @@ All graphs are located in the `mathlib_graphs/` directory:
 ### 3. Type-Deps Graph (`mathlib_type_deps.dot`)
 **Type signature dependencies**
 
-- **Nodes**: All constants (theorems, definitions, types, structures)
+- **Nodes**: Human-written constants (theorems, definitions, types, structures)
 - **Edges**: Used → User (if theorem B's *type signature* mentions constant A)
 - **Example**: `Nat → Nat.add_comm` (the theorem's type mentions Nat)
+- **Filtering**: Excludes auto-generated declarations (field accessors, recursors, pattern matchers, etc.)
 
 ### 4. Proof-Deps Graph (`mathlib_proof_deps.dot`)
 **Proof body dependencies**
 
-- **Nodes**: All constants (theorems, definitions, structures)
+- **Nodes**: Human-written constants (theorems, definitions, structures)
 - **Edges**: Used → User (if theorem B's *proof* uses theorem A)
 - **Example**: `Nat.add_comm → some_theorem` (the proof applies Nat.add_comm)
+- **Filtering**: Excludes auto-generated declarations (same as type-deps)
+- **Use case**: Most valuable for understanding proof strategies and theorem dependencies
 
 ## Generation Details
 
