@@ -34,7 +34,7 @@ type-deps
 ImportGraphTest/FileWithTransitiveImports
 ImportGraphTest/Used
 
-# Documentation directory (intentionally excluded - working notes)
-docs/
+# Documentation directory - allow GitHub Pages docs/
+# docs/
 
 web-explorer/
