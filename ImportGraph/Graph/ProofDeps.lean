@@ -25,7 +25,9 @@ For definitions: dependencies from the definition body
 
 namespace Lean.Environment
 
--- Process dependency arrays without accumulating in large intermediate arrays
+-- Process dependency arrays for proof-deps specifically
+-- Uses shouldIncludeConstantInProofDeps to exclude inductives, axioms, etc.
+-- This prevents orphaned edges where constructors redirect to their parent inductives
 private def applyTransitiveClosureChunked (env : Environment) (deps : Array Name) 
     (includeAux : Bool) (includeInstances : Bool) : CoreM (Array Name) := do
   let mut result : Array Name := #[]
@@ -42,15 +44,18 @@ private def applyTransitiveClosureChunked (env : Environment) (deps : Array Name
     if totalProcessed % 50000 == 0 then
       IO.eprintln s!"[DEBUG-CHUNKED] Processed {totalProcessed}/{depsCount} dependencies"
     
-    let shouldInclude ← shouldIncludeConstant env dep includeAux includeInstances
+    -- Use proof-deps specific filter to exclude inductives, axioms, etc.
+    let shouldInclude ← shouldIncludeConstantInProofDeps env dep includeAux includeInstances
     if shouldInclude then
       if !seen.contains dep then
         result := result.push dep
         seen := seen.insert dep
-    else if isMechanicalDeclaration dep then
-      let parent := getParentDeclaration dep
+    else
+      -- Dependency is filtered - try to redirect to parent
+      let parent := getParentDeclaration env dep
       if parent != dep && env.contains parent then
-        let parentOk ← shouldIncludeConstant env parent includeAux includeInstances
+        -- Use proof-deps specific filter for parent too!
+        let parentOk ← shouldIncludeConstantInProofDeps env parent includeAux includeInstances
         if parentOk && !seen.contains parent then
           result := result.push parent
           seen := seen.insert parent
@@ -64,6 +69,7 @@ public def proofDepsGraphStreaming (env : Environment)
   let mut processedCount := 0
   let mut skippedCount := 0
   let mut edgeCount := 0
+  let mut isolatedNodes := 0
   let allConstants := env.constants.toList
   let totalCount := allConstants.length
   
@@ -76,7 +82,7 @@ public def proofDepsGraphStreaming (env : Environment)
     if processedCount % 5000 == 0 then
       IO.eprintln s!"Processing constant {processedCount}/{totalCount}: {name}"
     
-    let shouldInclude ← shouldIncludeConstant env name includeAux includeInstances
+    let shouldInclude ← shouldIncludeConstantInProofDeps env name includeAux includeInstances
     if !shouldInclude then 
       skippedCount := skippedCount + 1
       continue
@@ -84,22 +90,26 @@ public def proofDepsGraphStreaming (env : Environment)
     let deps : Array Name := match info with
       | .thmInfo val => val.value.getUsedConstants
       | .defnInfo val => val.value.getUsedConstants
+      | .axiomInfo _ => #[]  -- Axioms have no proof body
       | _ => #[]
-    
-    if deps.isEmpty then continue
     
     let processedDeps ← applyTransitiveClosureChunked env deps includeAux includeInstances
     
-    -- Write edges directly to file as we discover them
-    for dep in processedDeps do
-      handle.putStrLn s!"  \"{dep}\" -> \"{name}\";"
-      edgeCount := edgeCount + 1
+    if processedDeps.isEmpty then
+      -- Write isolated node (no edges) so it appears in the graph as a root
+      handle.putStrLn s!"  \"{name}\";"
+      isolatedNodes := isolatedNodes + 1
+    else
+      -- Write edges directly to file as we discover them
+      for dep in processedDeps do
+        handle.putStrLn s!"  \"{dep}\" -> \"{name}\";"
+        edgeCount := edgeCount + 1
       
       -- Flush every 1000 edges
       if edgeCount % 1000 == 0 then
         _ ← handle.flush
   
-  IO.eprintln s!"Completed: {processedCount} constants iterated, {skippedCount} skipped, {edgeCount} edges written"
+  IO.eprintln s!"Completed: {processedCount} constants iterated, {skippedCount} skipped, {edgeCount} edges, {isolatedNodes} isolated nodes"
 
 /--
 Build a proof dependencies graph from the Lean environment.
@@ -128,7 +138,7 @@ public def proofDepsGraph (env : Environment)
     if processedCount % 5000 == 0 then
       IO.eprintln s!"Processing constant {processedCount}: {name}"
     
-    let shouldInclude ← shouldIncludeConstant env name includeAux includeInstances
+    let shouldInclude ← shouldIncludeConstantInProofDeps env name includeAux includeInstances
     if !shouldInclude then 
       skippedCount := skippedCount + 1
       continue
@@ -137,16 +147,22 @@ public def proofDepsGraph (env : Environment)
     | .thmInfo val =>
       let deps := val.value.getUsedConstants
       let processedDeps ← applyTransitiveClosureChunked env deps includeAux includeInstances
-      if processedDeps.size > 0 then
-        graph := graph.insert name processedDeps
+      -- Always add theorems to the graph, even with empty deps (they become roots)
+      -- This ensures other theorems can reference them as dependencies
+      graph := graph.insert name processedDeps
       
     | .defnInfo val =>
       let deps := val.value.getUsedConstants
       let processedDeps ← applyTransitiveClosureChunked env deps includeAux includeInstances
-      if processedDeps.size > 0 then
-        graph := graph.insert name processedDeps
+      -- Always add definitions to the graph, even with empty deps (they become roots)
+      graph := graph.insert name processedDeps
       
-    | .recInfo _ | .axiomInfo _ | .inductInfo _ | .ctorInfo _ | .opaqueInfo _ | .quotInfo _ =>
+    | .axiomInfo _ =>
+      -- Axioms have no proof body, so they have no outgoing edges
+      -- Add them as nodes with empty deps so they appear as roots
+      graph := graph.insert name #[]
+      
+    | .recInfo _ | .inductInfo _ | .ctorInfo _ | .opaqueInfo _ | .quotInfo _ =>
       continue
   
   IO.eprintln s!"Completed: {processedCount} constants iterated, {skippedCount} skipped"

@@ -10,6 +10,7 @@ public import Lean.CoreM
 import ImportGraph.Graph.FilterCommon
 import Lean.Data.NameMap.Basic
 import Lean.Meta.Match.MatcherInfo
+import Lean.Structure
 
 open Lean Meta
 
@@ -31,9 +32,19 @@ Use `--include-instances` to restore instance nodes.
 
 namespace Lean.Environment
 
-/-- Extract type dependencies: all constants mentioned in the type signature. -/
-private def getTypeDependencies (info : ConstantInfo) : Array Name :=
-  info.type.getUsedConstants
+/-- 
+Extract type dependencies: all constants mentioned in the type signature.
+For structures/classes, also includes parent structures as dependencies.
+-/
+private def getTypeDependencies (env : Environment) (name : Name) (info : ConstantInfo) : Array Name :=
+  let typeDeps := info.type.getUsedConstants
+  
+  -- For structures, also include parent structures as dependencies  
+  if let some structInfo := Lean.getStructureInfo? env name then
+    let parents := structInfo.parentInfo.map (·.structName)
+    typeDeps ++ parents
+  else 
+    typeDeps
 
 /-- Build type dependency graph based on constant type signatures. -/
 public def typeDepsGraph (env : Environment) 
@@ -44,7 +55,7 @@ public def typeDepsGraph (env : Environment)
   for (name, info) in env.constants.toList do
     let shouldInclude ← shouldIncludeConstant env name includeAux includeInstances
     if shouldInclude then
-      let deps := getTypeDependencies info
+      let deps := getTypeDependencies env name info
       let processedDeps ← applyTransitiveClosure env deps includeAux includeInstances
       graph := graph.insert name processedDeps
   
