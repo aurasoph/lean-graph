@@ -36,11 +36,16 @@ type-deps
 ImportGraphTest/FileWithTransitiveImports
 ImportGraphTest/Used
 
+<<<<<<< HEAD
 # Documentation directory (intentionally excluded - working notes)
 docs/
 <<<<<<< HEAD
 >>>>>>> b34312c (Add Mathlib dependency graphs with LFS for large files)
 =======
+=======
+# Documentation directory - allow GitHub Pages docs/
+# docs/
+>>>>>>> c9bc55b (Enable GitHub Pages deployment)
 
 web-explorer/
 >>>>>>> 43b41dd (renamed to make graph about structures more clear)
