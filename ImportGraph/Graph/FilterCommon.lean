@@ -242,30 +242,51 @@ public def applyTransitiveClosure (env : Environment) (deps : Array Name)
 
 /--
 Apply transitive closure specifically for proof dependency graphs.
-Uses shouldIncludeConstantInProofDeps to filter, which excludes inductives, axioms, etc.
-This prevents orphaned edges where auto-generated constructors redirect to their parent
-inductive types which shouldn't appear in proof dependency graphs.
+Uses shouldIncludeConstantInProofDeps to filter, which excludes inductives, etc.
+When a dependency is filtered out, recursively follows its dependencies to find
+what should actually be included in the proof dependency graph.
 -/
 public def applyTransitiveClosureForProofDeps (env : Environment) (deps : Array Name) 
     (includeAux : Bool) (includeInstances : Bool) : CoreM (Array Name) := do
   let mut result : Array Name := #[]
   let mut seen : NameSet := {}
   
-  for dep in deps do
+  -- Helper function to find includable dependencies recursively
+  -- Use a depth limit to ensure termination
+  let rec findIncludableDeps (dep : Name) (visited : NameSet) (depth : Nat) : CoreM (Array Name) := do
+    if depth = 0 || visited.contains dep then
+      return #[] -- Avoid cycles and limit recursion depth
+    
     let shouldInclude ← shouldIncludeConstantInProofDeps env dep includeAux includeInstances
     if shouldInclude then
-      if !seen.contains dep then
-        result := result.push dep
-        seen := seen.insert dep
-    else
-      -- Dependency is filtered - try to redirect to parent
-      let parent := getParentDeclaration env dep
-      if parent != dep && env.contains parent then
-        -- Use proof-deps specific filter for parent too!
-        let parentOk ← shouldIncludeConstantInProofDeps env parent includeAux includeInstances
-        if parentOk && !seen.contains parent then
-          result := result.push parent
-          seen := seen.insert parent
+      return #[dep]
+    
+    -- Dependency is filtered - get its own dependencies and recurse
+    let newVisited := visited.insert dep
+    let mut subResult : Array Name := #[]
+    
+    if let some info := env.find? dep then
+      let subDeps := match info with
+      | .thmInfo val => val.value.getUsedConstants
+      | .defnInfo val => val.value.getUsedConstants
+      | .axiomInfo _ => #[] -- Axioms have no dependencies
+      | _ => #[] -- Other types don't have proof dependencies we care about
+      
+      if depth > 0 then
+        for subDep in subDeps do
+          let subIncludable ← findIncludableDeps subDep newVisited (depth - 1)
+          subResult := subResult ++ subIncludable
+    
+    return subResult
+  termination_by depth
+  
+  for dep in deps do
+    -- Increase recursion depth limit - the previous limit of 10 was too restrictive
+    let includableDeps ← findIncludableDeps dep {} 50
+    for includableDep in includableDeps do
+      if !seen.contains includableDep then
+        result := result.push includableDep
+        seen := seen.insert includableDep
   
   return result
 
