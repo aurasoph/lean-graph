@@ -6,7 +6,7 @@ import ImportGraph.Export.Gexf
 import ImportGraph.Graph.Filter
 import ImportGraph.Graph.TypeDeps
 import ImportGraph.Graph.ProofDeps
-import ImportGraph.Graph.Hierarchy
+import ImportGraph.Graph.Structures
 import ImportGraph.Imports.ImportGraph
 import ImportGraph.Imports.RequiredModules
 import ImportGraph.Lean.Name
@@ -71,15 +71,15 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
           let state := { env }
           let g ← Prod.fst <$> (CoreM.toIO (env.proofDepsGraph includeAux includeInstances) ctx state)
           pure (g, true)
-        | "hierarchy" | "triangles" =>
+        | "hierarchy" | "triangles" | "structures" =>
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          let g ← Prod.fst <$> (CoreM.toIO (env.hierarchyGraph) ctx state)
+          let g ← Prod.fst <$> (CoreM.toIO (env.structuresGraph) ctx state)
           pure (g, true)
         | "imports" | "" =>
           pure (env.importGraph, false)
         | other =>
-          throw <| IO.userError s!"Unknown graph mode: '{other}'. Valid modes: imports, type-deps, proof-deps, hierarchy"
+          throw <| IO.userError s!"Unknown graph mode: '{other}'. Valid modes: imports, type-deps, proof-deps, hierarchy, structures"
       | none => pure (env.importGraph, false)
     
     let mut graph := graphInit
@@ -255,7 +255,7 @@ def graph : Cmd := `[Cli|
    If you are working in a downstream project, use `lake exe graph --to MyProject`."
 
   FLAGS:
-    "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'."
+    "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures'."
     "include-aux";             "Include auxiliary definitions (recursors, internal names, etc.). Default: exclude."
     "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
     "show-transitive";         "Show transitively redundant edges."

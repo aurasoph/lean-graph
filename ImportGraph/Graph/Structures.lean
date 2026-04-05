@@ -13,7 +13,7 @@ import Lean.Structure
 open Lean
 
 /-
-Structure inheritance hierarchy graph showing parent-child relationships
+Structure inheritance graph showing parent-child relationships
 between structures and typeclasses.
 -/
 
@@ -32,16 +32,16 @@ private def getParentStructures (env : Environment) (structName : Name) : Array 
 
 /--
 Check if a name is a private/internal declaration that should be filtered
-from the hierarchy graph.
+from the structures graph.
 -/
 private def isPrivateDeclaration (name : Name) : Bool :=
   name.isInternalDetail
 
 /--
-Build the structure/typeclass hierarchy graph.
+Build the structure/typeclass inheritance graph.
 
 For each structure in the environment with parent structures, create edges.
-This captures the inheritance hierarchy for both typeclasses and regular structures.
+This captures the inheritance relationships for both typeclasses and regular structures.
 
 Parameters:
 - `env`: The Lean environment to analyze
@@ -50,7 +50,7 @@ Returns a `NameMap (Array Name)` where:
 - Key: A structure name that has parents
 - Value: Array of parent structure names it extends
 -/
-public def hierarchyGraph (env : Environment) : CoreM (NameMap (Array Name)) := do
+public def structuresGraph (env : Environment) : CoreM (NameMap (Array Name)) := do
   let mut graph : NameMap (Array Name) := {}
   
   for (name, _) in env.constants.toList do
