@@ -97,8 +97,21 @@ class DependencyExplorer {
         try {
             document.querySelector('.loading').style.display = 'block';
             
-            // Load from mathlib_graphs directory - adjust path for GitHub Pages
-            const dotFile = `../mathlib_graphs/mathlib_${graphType}.dot`;
+            // Map graph types to actual file names  
+            const fileMap = {
+                'structures': 'mathlib_structures.dot',
+                'imports': 'mathlib_imports.dot', 
+                'type-deps': 'mathlib_type_deps.dot',
+                'proof-deps': 'mathlib_proof_deps.dot'
+            };
+            
+            const fileName = fileMap[graphType];
+            if (!fileName) {
+                throw new Error(`Unknown graph type: ${graphType}`);
+            }
+            
+            // Load from GitHub raw content since GitHub Pages can't access large files
+            const dotFile = `https://raw.githubusercontent.com/aurasoph/lean-graph/main/mathlib_graphs/${fileName}`;
             const response = await fetch(dotFile);
             
             if (!response.ok) {
