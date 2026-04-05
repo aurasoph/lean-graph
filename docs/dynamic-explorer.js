@@ -213,9 +213,23 @@ class DependencyExplorer {
                 }
                 
                 links.push({ source: source, target: target });
+                continue;
+            }
+            
+            // Parse standalone node declarations: "NodeName" [attributes];
+            const nodeMatch = trimmed.match(/"([^"]+)"\s*\[([^\]]*)\]/);
+            if (nodeMatch) {
+                const [, nodeName] = nodeMatch;
+                
+                if (!nodeMap.has(nodeName)) {
+                    const node = { id: nodeName, name: nodeName };
+                    nodes.push(node);
+                    nodeMap.set(nodeName, node);
+                }
             }
         }
         
+        console.log(`Parsed DOT: ${nodes.length} nodes, ${links.length} edges`);
         return { nodes, links };
     }
     
