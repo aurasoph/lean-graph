@@ -122,14 +122,19 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
       else
         toModule.isPrefixOf n
 
+    -- Fast path: skip expensive operations when includeLean is true and we're in constant-level mode
+    -- (proof-deps/type-deps), since --include-lean means "include everything"
+    let skipExpensiveFiltering := includeLean && isConstantLevel
+    
     -- `directDeps` contains files which are not in the package
     -- but directly imported by a file in the package
-    let directDeps : NameSet := graph.foldl (init := .empty) (fun acc n deps =>
-      if belongsToPackage n then
-        deps.filter (!belongsToPackage ·) |>.foldl (init := acc) NameSet.insert
-      else
-        acc)
-
+    let directDeps : NameSet := if skipExpensiveFiltering then .empty else 
+      graph.foldl (init := .empty) (fun acc n deps =>
+        if belongsToPackage n then
+          deps.filter (!belongsToPackage ·) |>.foldl (init := acc) NameSet.insert
+        else
+          acc)
+    
     let filter (n : Name) : Bool :=
       belongsToPackage n ||
       bif isPrefixOf `Std n then includeStd else
@@ -138,17 +143,19 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
     let filterDirect (n : Name) : Bool :=
       includeDirect ∧ directDeps.contains n
 
-    graph := graph.filterMap (fun n i =>
-      if filter n then
-        -- include node regularly
-        (i.filter (fun m => filterDirect m || filter m))
-      else if filterDirect n then
-        -- include node as direct dependency; drop any further deps.
-        some #[]
-      else
-        -- not included
-        none)
-    if args.hasFlag "exclude-meta" then
+    -- Skip expensive filterMap when in fast path
+    if !skipExpensiveFiltering then
+      graph := graph.filterMap (fun n i =>
+        if filter n then
+          -- include node regularly
+          (i.filter (fun m => filterDirect m || filter m))
+        else if filterDirect n then
+          -- include node as direct dependency; drop any further deps.
+          some #[]
+        else
+          -- not included
+          none)
+    if args.hasFlag "exclude-meta" && !skipExpensiveFiltering then
       -- Mathlib-specific exclusion of tactics
       let filterMathlibMeta : Name → Bool := fun n => (
         isPrefixOf `Mathlib.Tactic n ∨
