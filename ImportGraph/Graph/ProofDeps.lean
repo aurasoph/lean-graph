@@ -36,6 +36,35 @@ private def applyTransitiveClosureChunked (env : Environment) (deps : Array Name
   let depsCount := deps.size
   let mut totalProcessed := 0
   
+  -- Helper function to find includable dependencies recursively
+  -- Use a depth limit to ensure termination
+  let rec findIncludableDeps (dep : Name) (visited : NameSet) (depth : Nat) : CoreM (Array Name) := do
+    if depth = 0 || visited.contains dep then
+      return #[] -- Avoid cycles and limit recursion depth
+    
+    let shouldInclude ← shouldIncludeConstantInProofDeps env dep includeAux includeInstances
+    if shouldInclude then
+      return #[dep]
+    
+    -- Dependency is filtered - get its own dependencies and recurse
+    let newVisited := visited.insert dep
+    let mut subResult : Array Name := #[]
+    
+    if let some info := env.find? dep then
+      let subDeps := match info with
+      | .thmInfo val => val.value.getUsedConstants
+      | .defnInfo val => val.value.getUsedConstants
+      | .axiomInfo _ => #[] -- Axioms have no dependencies
+      | _ => #[] -- Other types don't have proof dependencies we care about
+      
+      if depth > 0 then
+        for subDep in subDeps do
+          let subIncludable ← findIncludableDeps subDep newVisited (depth - 1)
+          subResult := subResult ++ subIncludable
+    
+    return subResult
+  termination_by depth
+  
   -- Process all dependencies, but don't keep large intermediate collections
   for i in List.range depsCount do
     let dep := deps[i]!
@@ -44,21 +73,12 @@ private def applyTransitiveClosureChunked (env : Environment) (deps : Array Name
     if totalProcessed % 50000 == 0 then
       IO.eprintln s!"[DEBUG-CHUNKED] Processed {totalProcessed}/{depsCount} dependencies"
     
-    -- Use proof-deps specific filter to exclude inductives, axioms, etc.
-    let shouldInclude ← shouldIncludeConstantInProofDeps env dep includeAux includeInstances
-    if shouldInclude then
-      if !seen.contains dep then
-        result := result.push dep
-        seen := seen.insert dep
-    else
-      -- Dependency is filtered - try to redirect to parent
-      let parent := getParentDeclaration env dep
-      if parent != dep && env.contains parent then
-        -- Use proof-deps specific filter for parent too!
-        let parentOk ← shouldIncludeConstantInProofDeps env parent includeAux includeInstances
-        if parentOk && !seen.contains parent then
-          result := result.push parent
-          seen := seen.insert parent
+    -- Increase recursion depth limit - the previous limit of 10 was too restrictive
+    let includableDeps ← findIncludableDeps dep {} 50
+    for includableDep in includableDeps do
+      if !seen.contains includableDep then
+        result := result.push includableDep
+        seen := seen.insert includableDep
   
   return result
 
