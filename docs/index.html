@@ -249,6 +249,62 @@
             font-size: 12px;
             color: #666;
         }
+        .info-panel {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            min-width: 250px;
+            display: none;
+            z-index: 1000;
+        }
+        .node-info h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 16px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .stat-label {
+            font-weight: 500;
+            color: #666;
+        }
+        .stat-value {
+            color: #333;
+            font-family: monospace;
+        }
+        .actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 8px;
+        }
+        .actions button {
+            padding: 6px 12px;
+            border: 1px solid #0d6efd;
+            background: #0d6efd;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .actions button:hover {
+            background: #0b5ed7;
+        }
+        /* Better arrow visibility */
+        .link.highlight {
+            stroke: #dc3545 !important;
+            stroke-width: 3px !important;
+            stroke-opacity: 1 !important;
+        }
     </style>
 </head>
 <body>

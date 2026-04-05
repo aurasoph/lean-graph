@@ -78,8 +78,9 @@ class DependencyExplorer {
         
         this.svg.call(this.zoom);
         
-        // Add arrow marker
-        this.svg.append('defs').append('marker')
+        // Add arrow marker with better visibility
+        const defs = this.svg.append('defs');
+        defs.append('marker')
             .attr('id', 'arrowhead')
             .attr('viewBox', '-0 -5 10 10')
             .attr('refX', 13)
@@ -87,7 +88,19 @@ class DependencyExplorer {
             .attr('orient', 'auto')
             .append('path')
             .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
-            .attr('fill', '#999')
+            .attr('fill', '#333')
+            .style('stroke', 'none');
+            
+        // Add highlighted arrow marker  
+        defs.append('marker')
+            .attr('id', 'arrowhead-highlight')
+            .attr('viewBox', '-0 -5 10 10')
+            .attr('refX', 13)
+            .attr('refY', 0)
+            .attr('orient', 'auto')
+            .append('path')
+            .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
+            .attr('fill', '#dc3545')
             .style('stroke', 'none');
     }
     
@@ -95,7 +108,9 @@ class DependencyExplorer {
         this.currentGraph = graphType;
         
         try {
-            document.querySelector('.loading').style.display = 'block';
+            const loadingEl = document.querySelector('.loading');
+            loadingEl.style.display = 'block';
+            loadingEl.innerHTML = `Loading ${graphType} graph... <small>(may take a moment for large graphs)</small>`;
             
             // Map graph types to actual file names  
             const fileMap = {
@@ -137,7 +152,15 @@ class DependencyExplorer {
             });
             
             this.clearVisualization();
-            document.querySelector('.loading').style.display = 'none';
+            document.querySelector('.loading').innerHTML = 
+                `<div style="color: #28a745;">✅ Loaded ${this.allNodes.size} nodes and ${this.allLinks.size} links for ${graphType}</div>`;
+            
+            // Hide loading after a moment 
+            setTimeout(() => {
+                if (document.querySelector('.loading').style.display !== 'none') {
+                    document.querySelector('.loading').style.display = 'none';
+                }
+            }, 2000);
             
             console.log(`Loaded ${this.allNodes.size} nodes and ${this.allLinks.size} links for ${graphType}`);
             
@@ -197,8 +220,15 @@ class DependencyExplorer {
     }
     
     handleSearch(query, suggestionsEl) {
-        if (!query || !this.allNodes.size) {
+        if (!query) {
             suggestionsEl.style.display = 'none';
+            return;
+        }
+        
+        if (!this.allNodes.size) {
+            // Show loading message if data not yet loaded
+            suggestionsEl.innerHTML = '<div class="suggestion-item">Loading graph data...</div>';
+            suggestionsEl.style.display = 'block';
             return;
         }
         
@@ -207,7 +237,8 @@ class DependencyExplorer {
             .slice(0, 10);
         
         if (matches.length === 0) {
-            suggestionsEl.style.display = 'none';
+            suggestionsEl.innerHTML = '<div class="suggestion-item">No matches found</div>';
+            suggestionsEl.style.display = 'block';
             return;
         }
         
@@ -219,11 +250,13 @@ class DependencyExplorer {
         
         // Add click handlers to suggestions
         suggestionsEl.querySelectorAll('.suggestion-item').forEach(item => {
-            item.addEventListener('click', () => {
-                this.addNodeByName(item.dataset.name);
-                suggestionsEl.style.display = 'none';
-                document.querySelector('.search-input').value = '';
-            });
+            if (item.dataset.name) {
+                item.addEventListener('click', () => {
+                    this.addNodeByName(item.dataset.name);
+                    suggestionsEl.style.display = 'none';
+                    document.querySelector('.search-input').value = '';
+                });
+            }
         });
     }
     
@@ -371,12 +404,17 @@ class DependencyExplorer {
         });
         
         // Prepare data for D3
-        const nodes = Array.from(this.visibleNodes).map(id => ({
-            id,
-            name: id,
-            fx: this.nodePositions.has(id) ? this.nodePositions.get(id).x : undefined,
-            fy: this.nodePositions.has(id) ? this.nodePositions.get(id).y : undefined
-        }));
+        const nodes = Array.from(this.visibleNodes).map(id => {
+            // Calculate node statistics
+            const stats = this.calculateNodeStats(id);
+            return {
+                id,
+                name: id,
+                ...stats,
+                fx: this.nodePositions.has(id) ? this.nodePositions.get(id).x : undefined,
+                fy: this.nodePositions.has(id) ? this.nodePositions.get(id).y : undefined
+            };
+        });
         
         const links = Array.from(this.visibleLinks).map(linkId => {
             const link = this.allLinks.get(linkId);
@@ -392,6 +430,84 @@ class DependencyExplorer {
         // Update stats
         document.getElementById('graph-stats').textContent = 
             `${nodes.length} nodes, ${links.length} edges`;
+    }
+    
+    calculateNodeStats(nodeId) {
+        let parents = 0;
+        let children = 0;
+        let totalParents = 0;
+        let totalChildren = 0;
+        
+        this.allLinks.forEach(link => {
+            if (link.target === nodeId) {
+                totalParents++;
+                if (this.visibleNodes.has(link.source)) {
+                    parents++;
+                }
+            }
+            if (link.source === nodeId) {
+                totalChildren++;
+                if (this.visibleNodes.has(link.target)) {
+                    children++;
+                }
+            }
+        });
+        
+        return {
+            parents,
+            children, 
+            totalParents,
+            totalChildren
+        };
+    }
+    
+    showNodeInfo(nodeData, event) {
+        const infoPanel = document.querySelector('.info-panel');
+        
+        infoPanel.innerHTML = `
+            <div class="node-info">
+                <h3>${nodeData.name}</h3>
+                <div class="node-stats">
+                    <div class="stat-row">
+                        <span class="stat-label">Parents:</span> 
+                        <span class="stat-value">${nodeData.parents}/${nodeData.totalParents}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Children:</span> 
+                        <span class="stat-value">${nodeData.children}/${nodeData.totalChildren}</span>
+                    </div>
+                    <div class="actions">
+                        <button onclick="explorer.expandParentsOf('${nodeData.id}')">+ Show Parents</button>
+                        <button onclick="explorer.expandChildrenOf('${nodeData.id}')">+ Show Children</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        infoPanel.style.display = 'block';
+    }
+    
+    hideNodeInfo() {
+        const infoPanel = document.querySelector('.info-panel');
+        infoPanel.style.display = 'none';
+    }
+    
+    expandParentsOf(nodeId) {
+        this.allLinks.forEach(link => {
+            if (link.target === nodeId && !this.visibleNodes.has(link.source)) {
+                this.visibleNodes.add(link.source);
+            }
+        });
+        this.updateVisualization();
+    }
+    
+    expandChildrenOf(nodeId) {
+        this.allLinks.forEach(link => {
+            if (link.source === nodeId && !this.visibleNodes.has(link.target)) {
+                this.visibleNodes.add(link.target);
+            }
+        });
+        this.updateVisualization();
     }
     
     renderVisualization(nodes, links) {
@@ -414,10 +530,13 @@ class DependencyExplorer {
         
         link.exit().remove();
         
-        link.enter()
+        const linkEnter = link.enter()
             .append('line')
             .attr('class', 'link')
-            .merge(link);
+            .attr('marker-end', 'url(#arrowhead)');
+            
+        link.merge(linkEnter)
+            .attr('marker-end', 'url(#arrowhead)');
         
         // Update nodes
         const node = this.container
@@ -440,6 +559,25 @@ class DependencyExplorer {
             .attr('r', 8)
             .on('click', (event, d) => {
                 this.handleNodeClick(d.id);
+            })
+            .on('mouseover', (event, d) => {
+                this.showNodeInfo(d, event);
+                // Highlight connected edges
+                this.container.selectAll('.link')
+                    .classed('highlight', link => 
+                        (link.source.id || link.source) === d.id || 
+                        (link.target.id || link.target) === d.id)
+                    .attr('marker-end', link => 
+                        ((link.source.id || link.source) === d.id || 
+                         (link.target.id || link.target) === d.id) ? 
+                        'url(#arrowhead-highlight)' : 'url(#arrowhead)');
+            })
+            .on('mouseout', (event, d) => {
+                this.hideNodeInfo();
+                // Remove highlights
+                this.container.selectAll('.link')
+                    .classed('highlight', false)
+                    .attr('marker-end', 'url(#arrowhead)');
             });
         
         nodeEnter.append('text')
@@ -498,6 +636,8 @@ class DependencyExplorer {
 }
 
 // Initialize the explorer when the page loads
+let explorer; // Global reference for info panel buttons
+
 document.addEventListener('DOMContentLoaded', () => {
-    new DependencyExplorer();
+    explorer = new DependencyExplorer();
 });
