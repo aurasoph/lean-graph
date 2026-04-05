@@ -6,7 +6,7 @@ Authors: ImportGraph Contributors
 
 import ImportGraph.Graph.TypeDeps
 import ImportGraph.Graph.ProofDeps  
-import ImportGraph.Graph.Hierarchy
+import ImportGraph.Graph.Structures
 
 /-!
 # Regression Tests for Filtering Logic
@@ -17,7 +17,7 @@ identified as broken in the maintainer review.
 Key tests:
 1. No mechanical declarations in filtered graph outputs
 2. Instance detection works correctly (no false positives/negatives) 
-3. Private declarations filtered from hierarchy graphs
+3. Private declarations filtered from structures graphs
 4. Transitive closure preserves mathematical dependencies
 
 Usage: Include this in CI or manual testing to catch regressions.
@@ -64,8 +64,8 @@ def smokeTesting (env : Environment) : CoreM Unit := do
   let _ ← env.proofDepsGraph false false  
   IO.println "✓ Proof dependencies graph builds successfully"
   
-  let _ ← env.hierarchyGraph
-  IO.println "✓ Hierarchy graph builds successfully"
+  let _ ← env.structuresGraph
+  IO.println "✓ Structures graph builds successfully"
 
 /--
 Test that critical filtering APIs work as expected.

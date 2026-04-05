@@ -38,4 +38,9 @@ ImportGraphTest/Used
 
 # Documentation directory (intentionally excluded - working notes)
 docs/
+<<<<<<< HEAD
 >>>>>>> b34312c (Add Mathlib dependency graphs with LFS for large files)
+=======
+
+web-explorer/
+>>>>>>> 43b41dd (renamed to make graph about structures more clear)
