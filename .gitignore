@@ -37,4 +37,5 @@ ImportGraphTest/Used
 # Documentation directory - allow GitHub Pages docs/
 # docs/
 
-web-explorer/
+# Allow the web explorer directory
+# web-explorer/

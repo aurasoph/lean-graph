@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lean Import Graph Explorer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: #fafafa;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            color: #333;
+            margin-top: 0;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .graph-type {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .graph-type h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .graph-type p {
+            margin: 0 0 15px 0;
+            color: #666;
+        }
+        .download-link {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        .download-link:hover {
+            background: #5a67d8;
+        }
+        .stats {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .stats strong {
+            color: #0c5460;
+        }
+        .improvements {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .improvements h3 {
+            color: #155724;
+            margin-top: 0;
+        }
+        .improvements ul {
+            color: #155724;
+            margin: 10px 0;
+        }
+        .code-block {
+            background: #f1f3f4;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+            overflow-x: auto;
+        }
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 Lean Import Graph Explorer</h1>
+        <p>Advanced dependency visualization for Mathlib and Lean 4 projects</p>
+    </div>
+
+    <div class="improvements">
+        <h3>🚀 Recent Major Improvements</h3>
+        <ul>
+            <li><strong>Fixed Critical Transitive Closure Bug</strong> - Proof dependency graphs now correctly capture all dependencies (reduced from 314MB to 38MB)</li>
+            <li><strong>Renamed Hierarchy → Structures</strong> - Better reflects the focus on typeclasses and mathematical structures</li>
+            <li><strong>Enhanced Web Explorer</strong> - Added traversal mode for interactive graph navigation</li>
+            <li><strong>Performance Optimizations</strong> - Dramatically reduced spurious dependencies and file sizes</li>
+        </ul>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>📊 Available Graph Types</h2>
+            
+            <div class="graph-type">
+                <h3>Import Dependencies</h3>
+                <p>Shows which files import which other files in the Mathlib library.</p>
+                <div class="stats">
+                    <strong>~4,000 files</strong> | <strong>~45,000 import relationships</strong>
+                </div>
+                <a href="../mathlib_graphs/mathlib_imports.dot" class="download-link">Download Import Graph</a>
+            </div>
+
+            <div class="graph-type">
+                <h3>Proof Dependencies</h3>
+                <p>Tracks dependencies between theorem proofs - what theorems are used to prove other theorems.</p>
+                <div class="stats">
+                    <strong>~25,000 theorems</strong> | <strong>~690,000 proof dependencies</strong>
+                </div>
+                <a href="../mathlib_graphs/mathlib_proof-deps.dot" class="download-link">Download Proof Deps</a>
+            </div>
+
+            <div class="graph-type">
+                <h3>Type Dependencies</h3>
+                <p>Shows dependencies between type definitions - what types reference other types.</p>
+                <div class="stats">
+                    <strong>~15,000 definitions</strong> | <strong>~35,000 type relationships</strong>
+                </div>
+                <a href="../mathlib_graphs/mathlib_type-deps.dot" class="download-link">Download Type Deps</a>
+            </div>
+
+            <div class="graph-type">
+                <h3>Mathematical Structures</h3>
+                <p>Inheritance relationships between typeclasses, structures, and mathematical objects.</p>
+                <div class="stats">
+                    <strong>~1,200 structures</strong> | <strong>~2,500 inheritance links</strong>
+                </div>
+                <a href="../mathlib_graphs/mathlib_structures.dot" class="download-link">Download Structures</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🛠️ CLI Tool Usage</h2>
+            <p>Generate custom dependency graphs for your own Lean projects:</p>
+            
+            <div class="code-block">
+# Install the tool
+lake run MainGraph --help
+
+# Generate different graph types  
+lake run MainGraph imports
+lake run MainGraph proof-deps  
+lake run MainGraph type-deps
+lake run MainGraph structures
+
+# Output to specific file
+lake run MainGraph imports --to my_graph.dot
+            </div>
+
+            <h3>🌐 Interactive Web Explorer</h3>
+            <p>For local exploration with search and traversal features:</p>
+            <div class="code-block">
+cd web-explorer
+python -m http.server 8000
+# Visit localhost:8000
+            </div>
+
+            <h3>📁 DOT File Viewing</h3>
+            <p>View the downloaded .dot files with:</p>
+            <div class="code-block">
+# Using Graphviz
+dot -Tsvg graph.dot -o graph.svg
+
+# Using online viewers
+# Upload to: https://dreampuf.github.io/GraphvizOnline/
+            </div>
+
+            <h3>🔧 Key Features</h3>
+            <ul>
+                <li><strong>Smart Filtering</strong> - Excludes auto-generated code and internal details</li>
+                <li><strong>Transitive Closure</strong> - Properly follows dependency chains</li>
+                <li><strong>Multiple Formats</strong> - DOT, JSON, and interactive HTML</li>
+                <li><strong>Performance Optimized</strong> - Handles large codebases efficiently</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📚 About This Project</h2>
+        <p>This tool analyzes dependency relationships in Lean 4 mathematical libraries, with a focus on Mathlib. 
+        It extracts and visualizes different types of dependencies to help researchers understand the structure 
+        of mathematical formalization.</p>
+        
+        <p>The graphs above represent the current state of Mathlib (~April 2024) and showcase the intricate 
+        relationships between mathematical concepts, proofs, and their formal representations.</p>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="https://github.com/aurasoph/lean-graph" class="download-link">View Source Code on GitHub</a>
+        </div>
+    </div>
+</body>
+</html>
