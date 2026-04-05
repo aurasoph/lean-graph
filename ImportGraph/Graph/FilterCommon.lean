@@ -8,6 +8,9 @@ module
 public import Lean.Environment
 public import Lean.CoreM
 import Lean.Meta.Instances
+import Lean.AuxRecursor
+import Lean.ProjFns
+import Lean.Meta.Match.MatcherInfo
 
 open Lean Meta
 
@@ -16,6 +19,12 @@ open Lean Meta
 
 Shared filtering utilities used by TypeDeps and ProofDeps graphs to identify
 and filter mechanical/compiler-generated declarations.
+
+Uses official Lean Environment APIs to detect auto-generated declarations:
+- `isAuxRecursor`: Detects .rec, .recOn, .casesOn, .brecOn
+- `isNoConfusion`: Detects .noConfusion, .noConfusionType
+- `isProjectionFn`: Detects structure field accessors
+- `isMatcherCore`: Detects pattern matchers (.match_1, .match_2, etc.)
 -/
 
 namespace Lean.Environment
@@ -81,17 +90,34 @@ private def isLikelyInstance (name : Name) : Bool :=
 /-- Check if a constant should be included in dependency graphs. -/
 public def shouldIncludeConstant (env : Environment) (name : Name) 
     (includeAux : Bool) (includeInstances : Bool) : CoreM Bool := do
-  -- Always filter mechanical declarations
+  -- Always filter mechanical declarations (equation lemmas, sizeOf, etc.)
   if isMechanicalDeclaration name then
     return false
     
   if includeAux && includeInstances then
     return true
   
-  -- Check for auxiliary/generated declarations
-  let isAux := name.isInternalDetail || isAuxRecursor env name || isNoConfusion env name
-  if !includeAux && isAux then
-    return false
+  -- Check for auxiliary/generated declarations using official Lean APIs
+  if !includeAux then
+    -- Use Environment.isAuxRecursor for .rec, .recOn, .casesOn, .brecOn
+    if isAuxRecursor env name then
+      return false
+    
+    -- Use Environment.isNoConfusion for .noConfusion and .noConfusionType
+    if isNoConfusion env name then
+      return false
+    
+    -- Use Environment.isProjectionFn for field accessors (e.g., Point.x, Point.y)
+    if isProjectionFn env name then
+      return false
+    
+    -- Use Environment.isMatcherCore for pattern matchers (.match_1, .match_2, etc.)
+    if isMatcherCore env name then
+      return false
+    
+    -- Fallback: check for internal details (_cstage1, _unsafe, etc.)
+    if name.isInternalDetail then
+      return false
   
   -- Check for typeclass instances
   -- Note: Meta.isInstance doesn't work with importModules (extension state not loaded),
