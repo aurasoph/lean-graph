@@ -127,13 +127,19 @@ class DependencyExplorer {
             
             // Load from GitHub raw content since GitHub Pages can't access large files
             const dotFile = `https://raw.githubusercontent.com/aurasoph/lean-graph/main/mathlib_graphs/${fileName}`;
+            console.log(`Fetching: ${dotFile}`);
             const response = await fetch(dotFile);
             
             if (!response.ok) {
-                throw new Error(`Failed to load ${graphType} graph: ${response.status}`);
+                throw new Error(`Failed to load ${graphType} graph: ${response.status} ${response.statusText}`);
             }
             
             const dotContent = await response.text();
+            console.log(`Downloaded ${dotContent.length} characters for ${graphType}`);
+            
+            if (dotContent.length < 100) {
+                console.warn(`Very small file received for ${graphType}:`, dotContent.substring(0, 200));
+            }
             this.graphData = this.parseDotFile(dotContent);
             
             this.allNodes.clear();
@@ -179,26 +185,39 @@ class DependencyExplorer {
         // Extract nodes and edges from DOT format
         const lines = dotContent.split('\n');
         let inGraph = false;
+        let totalLines = 0;
+        let edgeLines = 0;
+        let nodeLines = 0;
+        let skippedLines = 0;
+        
+        console.log(`Parsing DOT file with ${lines.length} total lines`);
         
         for (const line of lines) {
             const trimmed = line.trim();
+            totalLines++;
             
             if (trimmed.includes('digraph') || trimmed.includes('{')) {
                 inGraph = true;
+                console.log(`Started parsing graph at line ${totalLines}`);
                 continue;
             }
             
             if (trimmed === '}') {
                 inGraph = false;
+                console.log(`Finished parsing graph at line ${totalLines}`);
                 break;
             }
             
-            if (!inGraph) continue;
+            if (!inGraph || !trimmed) {
+                skippedLines++;
+                continue;
+            }
             
             // Parse edges: "source" -> "target"
             const edgeMatch = trimmed.match(/"([^"]+)"\s*->\s*"([^"]+)"/);
             if (edgeMatch) {
                 const [, source, target] = edgeMatch;
+                edgeLines++;
                 
                 // Add nodes if not seen before
                 if (!nodeMap.has(source)) {
@@ -220,15 +239,23 @@ class DependencyExplorer {
             const nodeMatch = trimmed.match(/"([^"]+)"\s*\[([^\]]*)\]/);
             if (nodeMatch) {
                 const [, nodeName] = nodeMatch;
+                nodeLines++;
                 
                 if (!nodeMap.has(nodeName)) {
                     const node = { id: nodeName, name: nodeName };
                     nodes.push(node);
                     nodeMap.set(nodeName, node);
                 }
+                continue;
+            }
+            
+            // Log unmatched lines for debugging
+            if (totalLines <= 25 || (totalLines % 10000 === 0)) {
+                console.log(`Unmatched line ${totalLines}: ${trimmed.substring(0, 100)}`);
             }
         }
         
+        console.log(`Parse summary: ${totalLines} total lines, ${edgeLines} edges, ${nodeLines} node declarations, ${skippedLines} skipped`);
         console.log(`Parsed DOT: ${nodes.length} nodes, ${links.length} edges`);
         return { nodes, links };
     }
