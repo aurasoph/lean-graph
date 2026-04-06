@@ -39,3 +39,4 @@ ImportGraphTest/Used
 
 # Web explorer directory - allow for interactive visualization
 # web-explorer/__pycache__/
+web-explorer/server.log

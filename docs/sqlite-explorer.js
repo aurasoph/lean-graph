@@ -264,16 +264,6 @@ class SQLiteDependencyExplorer {
             const nodeText = node.label || node.id;
             const highlighted = this.highlightMatch(nodeText, query);
             item.html(highlighted);
-            
-            // Add type info for context
-            if (node.match_type) {
-                item.append('span')
-                    .attr('class', 'match-type')
-                    .style('color', '#666')
-                    .style('font-size', '11px')
-                    .style('margin-left', '8px')
-                    .text(`(${node.match_type})`);
-            }
         });
         
         suggestions.style('display', 'block');
