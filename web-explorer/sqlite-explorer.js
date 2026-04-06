@@ -181,14 +181,6 @@ class SQLiteDependencyExplorer {
             
             this.db = new SQL.Database(dbArray);
             
-            // Debug: Check database content
-            const nodeCount = this.queryDB("SELECT COUNT(*) as count FROM nodes")[0]?.count || 0;
-            console.log(`Loaded ${graphType} database with ${nodeCount} nodes`);
-            
-            // Test a simple query
-            const testNodes = this.queryDB("SELECT id FROM nodes LIMIT 5");
-            console.log('First 5 nodes:', testNodes);
-            
             this.container.select('.loading').style('display', 'none');
             this.container.select('.instructions').style('display', 'block');
             
@@ -197,11 +189,6 @@ class SQLiteDependencyExplorer {
             this.visibleEdges.clear();
             this.activeNode = null;
             this.render();
-            
-            // Show database stats
-            const nodeCount = this.queryDB("SELECT COUNT(*) as count FROM nodes")[0].count;
-            const edgeCount = this.queryDB("SELECT COUNT(*) as count FROM edges")[0].count;
-            console.log(`Loaded ${graphType}: ${nodeCount} nodes, ${edgeCount} edges`);
             
         } catch (error) {
             console.error('Error loading graph:', error);
@@ -218,6 +205,9 @@ class SQLiteDependencyExplorer {
         if (!this.db) return [];
         try {
             const stmt = this.db.prepare(sql);
+            if (params.length > 0) {
+                stmt.bind(params);
+            }
             const result = [];
             while (stmt.step()) {
                 result.push(stmt.getAsObject());
@@ -225,7 +215,7 @@ class SQLiteDependencyExplorer {
             stmt.free();
             return result;
         } catch (error) {
-            console.error('SQL Error:', error);
+            console.error('SQL Error:', error, 'Query:', sql, 'Params:', params);
             return [];
         }
     }
@@ -292,23 +282,17 @@ class SQLiteDependencyExplorer {
     getSuggestedNodes(query) {
         const lowerQuery = query.toLowerCase();
         
-        console.log('Searching for:', lowerQuery); // Debug output
-        
         // Strategy 1: Exact prefix matches (highest priority)
         let exactMatches = this.queryDB(
             "SELECT id, label, 'exact' as match_type FROM nodes WHERE LOWER(id) LIKE ? LIMIT 3",
             [`${lowerQuery}%`]
         );
         
-        console.log('Exact matches:', exactMatches); // Debug output
-        
         // Strategy 2: Contains matches for common math terms
         let containsMatches = this.queryDB(
             "SELECT id, label, 'contains' as match_type FROM nodes WHERE LOWER(id) LIKE ? AND LOWER(id) NOT LIKE ? LIMIT 4",
             [`%${lowerQuery}%`, `${lowerQuery}%`]
         );
-        
-        console.log('Contains matches:', containsMatches); // Debug output
         
         // Strategy 3: Word boundary matches (e.g., "Add" matches "AddCommGroup")
         let wordMatches = this.queryDB(
@@ -317,8 +301,6 @@ class SQLiteDependencyExplorer {
              `%.${lowerQuery}%`,
              `%_${lowerQuery}%`]
         );
-        
-        console.log('Word matches:', wordMatches); // Debug output
         
         // Combine results, removing duplicates and prioritizing
         const allMatches = [...exactMatches, ...containsMatches, ...wordMatches];
@@ -336,7 +318,6 @@ class SQLiteDependencyExplorer {
             })
             .slice(0, 8); // Limit to 8 suggestions
             
-        console.log('Final results:', result); // Debug output
         return result;
     }
     
