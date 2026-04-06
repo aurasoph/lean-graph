@@ -226,11 +226,11 @@ class SQLiteDependencyExplorer {
         if (mode === 'search') {
             d3.select('#search-controls').style('display', 'block');
             d3.select('#traversal-controls').style('display', 'none');
-            d3.select('#mode-info').text('Click to build custom neighborhoods • *Large graphs require local setup');
+            d3.select('#mode-info').text('Click nodes to build custom neighborhoods');
         } else {
             d3.select('#search-controls').style('display', 'none');
             d3.select('#traversal-controls').style('display', 'block');
-            d3.select('#mode-info').text('Click nodes to traverse • *Large graphs require local setup');
+            d3.select('#mode-info').text('Click nodes to set active and view immediate neighbors');
         }
     }
     
@@ -399,33 +399,7 @@ class SQLiteDependencyExplorer {
     }
     
     handleAction(action) {
-        if (!this.db || !this.activeNode) return;
-        
         switch (action) {
-            case 'expand-parents':
-                const parents = this.queryDB(
-                    "SELECT source FROM edges WHERE target = ?", 
-                    [this.activeNode]
-                );
-                parents.forEach(edge => {
-                    this.visibleNodes.add(edge.source);
-                    this.visibleEdges.add(`${edge.source}->${this.activeNode}`);
-                });
-                this.render();
-                break;
-            
-            case 'expand-children':
-                const children = this.queryDB(
-                    "SELECT target FROM edges WHERE source = ?",
-                    [this.activeNode]
-                );
-                children.forEach(edge => {
-                    this.visibleNodes.add(edge.target);
-                    this.visibleEdges.add(`${this.activeNode}->${edge.target}`);
-                });
-                this.render();
-                break;
-            
             case 'center-view':
                 this.centerView();
                 break;
