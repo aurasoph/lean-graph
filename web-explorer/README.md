@@ -11,7 +11,7 @@ Visit **[https://aurasoph.github.io/lean-graph/](https://aurasoph.github.io/lean
 
 ## Local Setup (Full Version)
 
-For the complete experience including large graphs (type-deps: 293K nodes, proof-deps: 321K nodes):
+For the complete experience including large graphs (type-deps: 373K nodes, proof-deps: 387K nodes):
 
 ### Prerequisites
 
@@ -25,8 +25,10 @@ For the complete experience including large graphs (type-deps: 293K nodes, proof
 git clone https://github.com/aurasoph/lean-graph.git
 cd lean-graph/web-explorer
 
-# 2. Generate JSON data files
-python3 convert_to_json.py
+# Note: Large database files download via Git LFS (may take several minutes)
+
+# 2. Generate SQLite databases (recommended)
+python3 convert_to_db.py
 
 # 3. Start local web server
 python3 -m http.server 8000
@@ -37,10 +39,21 @@ open http://localhost:8000
 
 ### Data Files Generated
 
-- `structures.json` (242KB) - Typeclass inheritance
-- `imports.json` (3.7MB) - Module dependencies  
-- `type-deps.json` (165MB) - Type signature dependencies
-- `proof-deps.json` (665MB) - Proof body dependencies
+**SQLite Databases** (recommended for performance):
+- `structures.db` (487KB) - Typeclass inheritance
+- `imports.db` (8.8MB) - Module dependencies  
+- `type-deps.db` (431MB) - Type signature dependencies
+- `proof-deps.db` (1.9GB) - Proof body dependencies
+
+**Alternative JSON Format**:
+```bash
+# Generate JSON files instead
+python3 convert_to_json.py
+```
+- `structures.json` (242KB) 
+- `imports.json` (3.7MB)
+- `type-deps.json` (165MB) 
+- `proof-deps.json` (665MB)
 
 ## Usage
 
@@ -72,10 +85,26 @@ open http://localhost:8000
 
 ## Technical Details
 
-- Built with D3.js force-directed layout
+- Built with D3.js force-directed layout and sql.js for database queries
 - Supports drag, zoom, and node positioning
-- Parses DOT graph files from the import-graph tool
-- Handles massive graphs through efficient JSON format
+- Uses SQLite databases for efficient neighborhood expansion queries
+- Falls back to JSON format when databases unavailable
+- Handles massive graphs through optimized data structures
+- Client-side search with fuzzy matching and autocomplete
+
+## Database Schema
+
+Each SQLite database contains:
+```sql
+CREATE TABLE nodes (id TEXT PRIMARY KEY, label TEXT, node_type TEXT);
+CREATE TABLE edges (id INTEGER PRIMARY KEY, source TEXT, target TEXT);
+CREATE INDEX idx_edges_source ON edges(source);
+CREATE INDEX idx_edges_target ON edges(target);
+CREATE VIEW node_stats AS SELECT id, 
+    (SELECT COUNT(*) FROM edges WHERE source = nodes.id) as out_degree,
+    (SELECT COUNT(*) FROM edges WHERE target = nodes.id) as in_degree
+FROM nodes;
+```
 
 ## Graph Generation
 

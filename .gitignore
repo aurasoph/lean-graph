@@ -52,5 +52,9 @@ web-explorer/
 >>>>>>> 43b41dd (renamed to make graph about structures more clear)
 =======
 # Web explorer directory - allow for interactive visualization
+<<<<<<< HEAD
 # web-explorer/
 >>>>>>> 53c5d3b (reorganized)
+=======
+# web-explorer/__pycache__/
+>>>>>>> 6e18788 (probably fixed now)

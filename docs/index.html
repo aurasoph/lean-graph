@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mathlib Dependency Explorer</title>
+    <title>Interactive Mathlib Dependency Explorer</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body {
@@ -61,12 +61,25 @@
             padding: 12px;
             cursor: pointer;
             border-bottom: 1px solid #f0f0f0;
+            line-height: 1.4;
         }
         .suggestion-item:hover {
             background: #f8f9fa;
         }
         .suggestion-item:last-child {
             border-bottom: none;
+        }
+        .match-type {
+            font-size: 11px;
+            color: #666;
+            margin-left: 8px;
+            opacity: 0.8;
+        }
+        .suggestion-item strong {
+            color: #0d6efd;
+            background: rgba(13, 110, 253, 0.1);
+            padding: 1px 2px;
+            border-radius: 2px;
         }
         .graph-selector {
             display: flex;
@@ -234,17 +247,9 @@
         .error {
             color: #dc3545;
             background: #f8d7da;
-            padding: 20px;
+            padding: 15px;
             border-radius: 6px;
             margin: 20px;
-            line-height: 1.6;
-        }
-        .error code {
-            background: #e2e3e5;
-            padding: 2px 4px;
-            border-radius: 3px;
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 13px;
         }
         .instructions {
             position: absolute;
@@ -262,10 +267,12 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Mathlib Dependency Explorer</h1>
+            <h1>Interactive Mathlib Dependency Explorer</h1>
             <div class="graph-selector">
                 <button class="graph-btn active" data-graph="structures">Structures</button>
                 <button class="graph-btn" data-graph="imports">Imports</button>
+                <button class="graph-btn" data-graph="type-deps">Type Deps</button>
+                <button class="graph-btn" data-graph="proof-deps">Proof Deps</button>
             </div>
         </div>
 
@@ -274,12 +281,12 @@
             <button class="mode-btn active" data-mode="search">Search Mode</button>
             <button class="mode-btn" data-mode="traversal">Traversal Mode</button>
             <div id="mode-info" style="margin-top: 8px; color: #495057; font-size: 14px; font-weight: 500;">
-                Click to build custom neighborhoods • For large graphs (type-deps, proof-deps) see <a href="https://github.com/aurasoph/lean-graph" target="_blank">local setup</a>
+                Click to build custom neighborhoods
             </div>
         </div>
 
         <div class="search-section">
-            <input type="text" class="search-input" placeholder="Search for a node to start exploring... (e.g., Ring, AddCommGroup, Continuous)" autocomplete="off">
+            <input type="text" class="search-input" placeholder="Search nodes... Try: Add, Ring, Continuous, List, Real..." autocomplete="off">
             <div class="suggestions"></div>
         </div>
 
