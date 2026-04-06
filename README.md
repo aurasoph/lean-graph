@@ -10,12 +10,12 @@ All graphs are located in the `mathlib_graphs/` directory:
 
 | File | Size | Nodes | Edges | Description |
 |------|------|-------|-------|-------------|
-| **mathlib_imports.dot** | 3.1M | 10,283 | 27,129 | Module-level import dependencies |
-| **mathlib_hierarchy.dot** | 160K | 1,086 | 1,578 | Typeclass/structure inheritance hierarchy |
-| **mathlib_type_deps.dot** | 137M | 373,541 | 1,737,466 | Type signature dependencies |
-| **mathlib_proof_deps.dot** | 437M | 349,092 | 6,613,804 | Proof body dependencies |
+| **mathlib_imports.dot** | 3.1M | ~10K | ~27K | Module-level import dependencies |
+| **mathlib_structures.dot** | 160K | ~1K | ~1.5K | Typeclass/structure inheritance hierarchy |
+| **mathlib_type_deps.dot** | 135M | ~373K | ~1.7M | Type signature dependencies |
+| **mathlib_proof_deps.dot** | 544M | ~387K | ~8.2M | Proof body dependencies |
 
-**Note:** Type-deps and proof-deps graphs filter out auto-generated declarations (constructors, field accessors, recursors, etc.) to include only human-written mathematics. This represents ~373K of Mathlib's ~395K theorems and definitions.
+**Note:** Type-deps and proof-deps graphs filter out auto-generated declarations (constructors, field accessors, recursors, equation lemmas, etc.) to include only human-written mathematics. The graphs contain **all of Lean, Std, and Mathlib** combined, representing ~373K human-written constants from the entire proof environment.
 
 
 ## Graph Types Explained
@@ -26,7 +26,7 @@ All graphs are located in the `mathlib_graphs/` directory:
 - **Nodes**: Lean modules (e.g., `Mathlib.Data.List.Basic`)
 - **Edges**: Module A → Module B means "B imports A"
 
-### 2. Hierarchy Graph (`mathlib_hierarchy.dot`)
+### 2. Structures Graph (`mathlib_structures.dot`)
 **Typeclass and structure inheritance**
 
 - **Nodes**: Structures/classes that extend other structures (e.g., Group, Ring, Field)
@@ -51,14 +51,22 @@ All graphs are located in the `mathlib_graphs/` directory:
 
 ## Generation Details
 
-Graphs were generated from Mathlib4 using:
+Graphs were generated from within the Mathlib4 repository using the import-graph tool:
 
 ```bash
+# From within mathlib4/ directory:
 lake exe graph --mode imports --to Mathlib --include-lean mathlib_imports.dot
-lake exe graph --mode hierarchy --to Mathlib --include-lean mathlib_hierarchy.dot
-lake exe graph --mode type-deps --to Mathlib --include-lean mathlib_type_deps.dot
-lake exe graph --mode proof-deps --to Mathlib --include-lean mathlib_proof_deps.dot
+lake exe graph --mode structures --to Mathlib --include-lean mathlib_structures.dot
+lake exe graph --mode type-deps --include-lean mathlib_type_deps.dot
+lake exe graph --mode proof-deps --include-lean mathlib_proof_deps.dot
 ```
+
+**Key flags:**
+- `--include-lean`: Include Lean standard library and Std library (not just Mathlib)
+- `--to Mathlib`: For imports/structures graphs, focus on Mathlib modules
+- Without `--to`: For type-deps/proof-deps, includes all constants from the entire environment (Lean + Std + Mathlib)
+
+This produces graphs containing the complete proof environment, not just Mathlib-specific content.
 
 ## File Format
 
