@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mathlib Dependency Explorer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .search-section {
+            flex: 1;
+            max-width: 500px;
+            position: relative;
+        }
+        .search-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #0d6efd;
+        }
+        .suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            background: white;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .suggestion-item {
+            padding: 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .suggestion-item:hover {
+            background: #f8f9fa;
+        }
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        .graph-selector {
+            display: flex;
+            gap: 10px;
+        }
+        .graph-btn {
+            padding: 8px 16px;
+            border: 2px solid #dee2e6;
+            background: white;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .graph-btn.active {
+            background: #0d6efd;
+            color: white;
+            border-color: #0d6efd;
+        }
+        .mode-btn {
+            padding: 8px 16px;
+            border: 2px solid #dee2e6;
+            background: white;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        .mode-btn:hover {
+            background: #f0f0f0;
+        }
+        .mode-btn.active {
+            background: #28a745;
+            color: white;
+            border-color: #28a745;
+        }
+        .mode-selector {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+        .graph-container {
+            position: relative;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            height: 700px;
+            background: white;
+            overflow: hidden;
+        }
+        .controls {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        .control-row {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .control-row:last-child {
+            margin-bottom: 0;
+        }
+        .control-btn {
+            margin: 2px;
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .control-btn:hover {
+            background: #f0f0f0;
+        }
+        .control-btn.primary {
+            background: #0d6efd;
+            color: white;
+            border-color: #0d6efd;
+        }
+        .control-btn.danger {
+            background: #dc3545;
+            color: white;
+            border-color: #dc3545;
+        }
+        .info-panel {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            max-width: 300px;
+            display: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        .node {
+            cursor: pointer;
+            stroke-width: 2px;
+        }
+        .node.root {
+            fill: #28a745;
+            stroke: #155724;
+        }
+        .node.expanded {
+            fill: #17a2b8;
+            stroke: #0c5460;
+        }
+        .node.selected {
+            fill: #ffc107;
+            stroke: #856404;
+            stroke-width: 3px;
+        }
+        .node.child {
+            fill: #fd7e14;
+            stroke: #fd7e14;
+        }
+        .node.parent {
+            fill: #6610f2;
+            stroke: #6610f2;
+        }
+        .node.active {
+            fill: #28a745;
+            stroke: #155724;
+            stroke-width: 4px;
+        }
+        .node.neighbor {
+            fill: #6c757d;
+            stroke: #495057;
+        }
+        .link {
+            stroke: #6c757d;
+            stroke-opacity: 0.7;
+            stroke-width: 2px;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+        .link.highlight {
+            stroke: #dc3545;
+            stroke-width: 3px;
+            stroke-opacity: 0.9;
+        }
+        .node-label {
+            font-size: 11px;
+            pointer-events: none;
+            text-anchor: middle;
+            font-weight: 500;
+            fill: #333;
+        }
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            font-size: 18px;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 20px;
+            border-radius: 6px;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .error code {
+            background: #e2e3e5;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+        }
+        .instructions {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(255,255,255,0.95);
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Mathlib Dependency Explorer</h1>
+            <div class="graph-selector">
+                <button class="graph-btn active" data-graph="structures">Structures</button>
+                <button class="graph-btn" data-graph="imports">Imports</button>
+            </div>
+        </div>
+
+        <!-- Mode Selector -->
+        <div class="mode-selector" style="margin-bottom: 15px; text-align: center;">
+            <button class="mode-btn active" data-mode="search">Search Mode</button>
+            <button class="mode-btn" data-mode="traversal">Traversal Mode</button>
+            <div id="mode-info" style="margin-top: 8px; color: #495057; font-size: 14px; font-weight: 500;">
+                Click to build custom neighborhoods • For large graphs (type-deps, proof-deps) see <a href="https://github.com/aurasoph/lean-graph" target="_blank">local setup</a>
+            </div>
+        </div>
+
+        <div class="search-section">
+            <input type="text" class="search-input" placeholder="Search for a node to start exploring... (e.g., Ring, AddCommGroup, Continuous)" autocomplete="off">
+            <div class="suggestions"></div>
+        </div>
+
+        <div class="graph-container">
+            <div class="loading">Loading graph data...</div>
+            
+            <div class="controls">
+                <div class="control-row" id="search-controls">
+                    <strong>Click nodes to expand!</strong>
+                </div>
+                <div class="control-row" id="traversal-controls" style="display: none;">
+                    <strong id="active-node-display">Active: None</strong>
+                </div>
+                <div class="control-row">
+                    <button class="control-btn primary" data-action="expand-parents">+ Parents</button>
+                    <button class="control-btn primary" data-action="expand-children">+ Children</button>
+                </div>
+                <div class="control-row">
+                    <button class="control-btn" data-action="center-view">Center</button>
+                    <button class="control-btn danger" data-action="clear">Clear All</button>
+                </div>
+                <div class="control-row">
+                    <small id="graph-stats">0 nodes, 0 edges</small>
+                </div>
+            </div>
+
+            <div class="info-panel"></div>
+            
+            <div class="instructions" style="display: none;">
+                🖱️ <strong>Click</strong> nodes to expand • 🔍 <strong>Search</strong> to add nodes • 📌 <strong>Drag</strong> to move
+            </div>
+
+            <svg width="100%" height="100%"></svg>
+        </div>
+    </div>
+
+    <script src="sqlite-explorer.js"></script>
+</body>
+</html>
