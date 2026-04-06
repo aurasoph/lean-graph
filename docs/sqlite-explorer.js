@@ -150,32 +150,44 @@ class SQLiteDependencyExplorer {
         this.container.select('.loading').text('Loading graph database...');
         
         try {
-            // Check file sizes for appropriate handling
-            const response = await fetch(`data/${graphType}.db`, { method: 'HEAD' });
-            const fileSize = parseInt(response.headers.get('content-length') || '0');
-            const fileSizeMB = fileSize / (1024 * 1024);
+            // Check if running on GitHub Pages (no large files available)
+            const isGitHubPages = window.location.hostname.includes('github.io');
             
-            if (fileSizeMB > 100 && (graphType === 'type-deps' || graphType === 'proof-deps')) {
-                // Show message for large files
+            if (isGitHubPages && (graphType === 'type-deps' || graphType === 'proof-deps')) {
+                // Show message for unavailable large graphs on GitHub Pages
                 this.container.select('.loading').html(`
                     <div class="error">
-                        <strong>${graphType} database too large for browser</strong><br>
-                        Database size: ${fileSizeMB.toFixed(0)}MB<br><br>
-                        <strong>For large graphs, use local Python/Node.js tools:</strong><br>
+                        <strong>${graphType} graph not available on GitHub Pages</strong><br><br>
+                        Large graphs (${graphType === 'type-deps' ? '412MB' : '1.8GB'}) require local setup.<br><br>
+                        <strong>For complete experience:</strong><br>
                         1. Clone repository: <code>git clone https://github.com/aurasoph/lean-graph.git</code><br>
-                        2. Query databases: <code>cd web-explorer && python3 -c "import sqlite3; conn=sqlite3.connect('data/${graphType}.db')"</code><br>
-                        3. Example query: <code>SELECT * FROM nodes WHERE id LIKE 'Ring%' LIMIT 10</code>
+                        2. Run locally: <code>cd lean-graph/web-explorer && python3 -m http.server 8000</code><br>
+                        3. Open: <code>http://localhost:8000</code>
                     </div>
                 `);
                 return;
             }
             
-            // Load small databases (structures, imports)
+            // Load database (works for all graphs locally)
+            this.container.select('.loading').text(`Loading ${graphType} database...`);
             const dbResponse = await fetch(`data/${graphType}.db`);
+            
+            if (!dbResponse.ok) {
+                throw new Error(`Failed to load ${graphType}.db: ${dbResponse.status}`);
+            }
+            
             const dbBuffer = await dbResponse.arrayBuffer();
             const dbArray = new Uint8Array(dbBuffer);
             
             this.db = new SQL.Database(dbArray);
+            
+            // Debug: Check database content
+            const nodeCount = this.queryDB("SELECT COUNT(*) as count FROM nodes")[0]?.count || 0;
+            console.log(`Loaded ${graphType} database with ${nodeCount} nodes`);
+            
+            // Test a simple query
+            const testNodes = this.queryDB("SELECT id FROM nodes LIMIT 5");
+            console.log('First 5 nodes:', testNodes);
             
             this.container.select('.loading').style('display', 'none');
             this.container.select('.instructions').style('display', 'block');
@@ -240,10 +252,8 @@ class SQLiteDependencyExplorer {
             return;
         }
         
-        const matches = this.queryDB(
-            "SELECT id FROM nodes WHERE id LIKE ? OR label LIKE ? LIMIT 10",
-            [`%${query}%`, `%${query}%`]
-        );
+        // Enhanced search with multiple strategies
+        const matches = this.getSuggestedNodes(query);
         
         if (matches.length === 0) {
             suggestions.style('display', 'none');
@@ -252,17 +262,98 @@ class SQLiteDependencyExplorer {
         
         suggestions.html('');
         matches.forEach(node => {
-            suggestions.append('div')
+            const item = suggestions.append('div')
                 .attr('class', 'suggestion-item')
-                .text(node.id)
                 .on('click', () => {
                     this.addNode(node.id);
                     d3.select('.search-input').node().value = '';
                     suggestions.style('display', 'none');
                 });
+            
+            // Highlight the match with different display based on match type
+            const nodeText = node.label || node.id;
+            const highlighted = this.highlightMatch(nodeText, query);
+            item.html(highlighted);
+            
+            // Add type info for context
+            if (node.match_type) {
+                item.append('span')
+                    .attr('class', 'match-type')
+                    .style('color', '#666')
+                    .style('font-size', '11px')
+                    .style('margin-left', '8px')
+                    .text(`(${node.match_type})`);
+            }
         });
         
         suggestions.style('display', 'block');
+    }
+    
+    getSuggestedNodes(query) {
+        const lowerQuery = query.toLowerCase();
+        
+        console.log('Searching for:', lowerQuery); // Debug output
+        
+        // Strategy 1: Exact prefix matches (highest priority)
+        let exactMatches = this.queryDB(
+            "SELECT id, label, 'exact' as match_type FROM nodes WHERE LOWER(id) LIKE ? LIMIT 3",
+            [`${lowerQuery}%`]
+        );
+        
+        console.log('Exact matches:', exactMatches); // Debug output
+        
+        // Strategy 2: Contains matches for common math terms
+        let containsMatches = this.queryDB(
+            "SELECT id, label, 'contains' as match_type FROM nodes WHERE LOWER(id) LIKE ? AND LOWER(id) NOT LIKE ? LIMIT 4",
+            [`%${lowerQuery}%`, `${lowerQuery}%`]
+        );
+        
+        console.log('Contains matches:', containsMatches); // Debug output
+        
+        // Strategy 3: Word boundary matches (e.g., "Add" matches "AddCommGroup")
+        let wordMatches = this.queryDB(
+            "SELECT id, label, 'word' as match_type FROM nodes WHERE LOWER(id) LIKE ? OR LOWER(id) LIKE ? OR LOWER(id) LIKE ? LIMIT 3",
+            [`%${lowerQuery.charAt(0).toUpperCase() + lowerQuery.slice(1)}%`, 
+             `%.${lowerQuery}%`,
+             `%_${lowerQuery}%`]
+        );
+        
+        console.log('Word matches:', wordMatches); // Debug output
+        
+        // Combine results, removing duplicates and prioritizing
+        const allMatches = [...exactMatches, ...containsMatches, ...wordMatches];
+        const uniqueMatches = Array.from(
+            new Map(allMatches.map(item => [item.id, item])).values()
+        );
+        
+        // Sort by relevance: exact > word boundary > contains
+        const priorityOrder = { 'exact': 1, 'word': 2, 'contains': 3 };
+        const result = uniqueMatches
+            .sort((a, b) => {
+                const priorityA = priorityOrder[a.match_type] || 4;
+                const priorityB = priorityOrder[b.match_type] || 4;
+                return priorityA - priorityB;
+            })
+            .slice(0, 8); // Limit to 8 suggestions
+            
+        console.log('Final results:', result); // Debug output
+        return result;
+    }
+    
+    highlightMatch(text, query) {
+        const lowerText = text.toLowerCase();
+        const lowerQuery = query.toLowerCase();
+        
+        if (lowerText.includes(lowerQuery)) {
+            const startIndex = lowerText.indexOf(lowerQuery);
+            const endIndex = startIndex + query.length;
+            
+            return text.substring(0, startIndex) +
+                   `<strong style="color: #0d6efd;">${text.substring(startIndex, endIndex)}</strong>` +
+                   text.substring(endIndex);
+        }
+        
+        return text;
     }
     
     searchAndAdd(query) {

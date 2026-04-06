@@ -2,6 +2,16 @@
 
 This repository contains complete dependency graphs for [Mathlib4](https://github.com/leanprover-community/mathlib4), generated using the [import-graph](https://github.com/leanprover-community/import-graph) tool.
 
+## 🌐 Interactive Web Explorer
+
+**[Explore the graphs online →](https://aurasoph.github.io/lean-graph/)**
+
+Browse dependency relationships with an interactive web interface:
+- **Search Mode**: Build custom neighborhoods by clicking nodes  
+- **Traversal Mode**: Navigate step-by-step through dependencies
+- Available online: Structures (1.6K nodes) and Imports (10K nodes)
+- [Local setup](#local-web-explorer) required for large graphs (type-deps: 373K nodes, proof-deps: 387K nodes)
+
 For documentation on the import-graph tool itself, see the [original repository](https://github.com/leanprover-community/import-graph).
 
 ## Graph Files
@@ -67,6 +77,45 @@ lake exe graph --mode proof-deps --include-lean mathlib_proof_deps.dot
 - Without `--to`: For type-deps/proof-deps, includes all constants from the entire environment (Lean + Std + Mathlib)
 
 This produces graphs containing the complete proof environment, not just Mathlib-specific content.
+
+## Local Web Explorer
+
+For the complete interactive experience including large graphs:
+
+### Prerequisites
+- Python 3.6+
+- Git
+
+### Setup
+```bash
+# 1. Clone and setup
+git clone https://github.com/aurasoph/lean-graph.git
+cd lean-graph/web-explorer
+
+# Note: Large files (type-deps: 431MB, proof-deps: 1.9GB) download via Git LFS
+# The clone may take several minutes depending on connection speed
+
+# 2. Generate databases (creates SQLite .db files from DOT files)
+python3 convert_to_db.py
+
+# 3. Start local web server  
+python3 -m http.server 8000
+
+# 4. Open in browser
+open http://localhost:8000
+```
+
+This provides access to all four graph types with efficient SQLite-based querying:
+- **Structures** (487KB database) - Typeclass inheritance hierarchy
+- **Imports** (8.8MB database) - Module dependencies  
+- **Type-deps** (431MB database) - Type signature dependencies
+- **Proof-deps** (1.9GB database) - Proof body dependencies
+
+### Alternative JSON Format
+```bash
+# Generate JSON files instead (for compatibility)
+python3 convert_to_json.py
+```
 
 ## File Format
 
