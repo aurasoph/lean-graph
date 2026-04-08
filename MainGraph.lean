@@ -3,13 +3,22 @@ module
 public import Cli.Basic
 import ImportGraph.Export.DotFile
 import ImportGraph.Export.Gexf
+import ImportGraph.Export.DotFileUnified
 import ImportGraph.Graph.Filter
+<<<<<<< HEAD
 <<<<<<< HEAD
 =======
 import ImportGraph.Graph.TypeDeps
 import ImportGraph.Graph.ProofDeps
 import ImportGraph.Graph.Structures
 >>>>>>> 43b41dd (renamed to make graph about structures more clear)
+=======
+import ImportGraph.Graph.TransitiveClosure
+import ImportGraph.Graph.TypeDeps
+import ImportGraph.Graph.ProofDeps
+import ImportGraph.Graph.Structures
+import ImportGraph.Graph.Unified
+>>>>>>> e03d90e (added unified graph and streamlined infrastructure)
 import ImportGraph.Imports.ImportGraph
 import ImportGraph.Imports.RequiredModules
 import ImportGraph.Lean.Name
@@ -59,34 +68,62 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
     
     -- Select graph mode based on --mode flag
     -- Track whether we're in constant-level mode (vs module-level)
-    let (graphInit, isConstantLevel) ← match args.flag? "mode" with
+    let (graphInit, isConstantLevel, isUnifiedMode) ← match args.flag? "mode" with
       | some modeFlag =>
         let mode := (modeFlag.as! String).toLower
+        let tier : Environment.FilterTier := 
+          if args.hasFlag "include-aux" then .exhaustive
+          else if args.hasFlag "mathematical" then .mathematical
+          else .standard
+        let includeInstances := args.hasFlag "include-instances"
+        
         match mode with
+        | "unified" =>
+          pure ({}, true, true)
         | "type-deps" | "blueprint" =>
-          let includeAux := args.hasFlag "include-aux"
-          let includeInstances := args.hasFlag "include-instances"
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          let g ← Prod.fst <$> (CoreM.toIO (env.typeDepsGraph includeAux includeInstances) ctx state)
-          pure (g, true)
+          let g ← Prod.fst <$> (CoreM.toIO (env.typeDepsGraph tier includeInstances) ctx state)
+          pure (g, true, false)
         | "proof-deps" | "logic" =>
-          let includeAux := args.hasFlag "include-aux"
-          let includeInstances := args.hasFlag "include-instances"
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          let g ← Prod.fst <$> (CoreM.toIO (env.proofDepsGraph includeAux includeInstances) ctx state)
-          pure (g, true)
+          let g ← Prod.fst <$> (CoreM.toIO (env.proofDepsGraph tier includeInstances) ctx state)
+          pure (g, true, false)
         | "hierarchy" | "triangles" | "structures" =>
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          let g ← Prod.fst <$> (CoreM.toIO (env.structuresGraph) ctx state)
-          pure (g, true)
+          let g ← Prod.fst <$> (CoreM.toIO (env.structuresGraph tier) ctx state)
+          pure (g, true, false)
         | "imports" | "" =>
-          pure (env.importGraph, false)
+          pure (env.importGraph, false, false)
         | other =>
-          throw <| IO.userError s!"Unknown graph mode: '{other}'. Valid modes: imports, type-deps, proof-deps, hierarchy, structures"
-      | none => pure (env.importGraph, false)
+          throw <| IO.userError s!"Unknown graph mode: '{other}'. Valid modes: imports, type-deps, proof-deps, hierarchy, structures, unified"
+      | none => pure (env.importGraph, false, false)
+    
+    -- Handle unified mode separately since it has a different type
+    if isUnifiedMode then
+      let tier : Environment.FilterTier := 
+        if args.hasFlag "include-aux" then .exhaustive
+        else if args.hasFlag "mathematical" then .mathematical
+        else .standard
+      let includeInstances := args.hasFlag "include-instances"
+      let ctx := { options := {}, fileName := "<input>", fileMap := default }
+      let state := { env }
+      let unifiedGraph ← Prod.fst <$> (CoreM.toIO (ImportGraph.Unified.unifiedGraph env tier includeInstances) ctx state)
+      
+      -- Write unified DOT file
+      if extensions.contains "dot" then
+        let dotOutputs := match args.variableArgsAs! String with
+          | #[] => #["unified_graph.dot"]
+          | outputs => outputs.filter (fun o =>
+              match (o : FilePath).extension with
+              | none | some "dot" => true
+              | _ => false)
+        for output in dotOutputs do
+          ImportGraph.Unified.Export.writeUnifiedGraphToFile unifiedGraph output
+      
+      return {}  -- Return empty for GEXF (unified doesn't support GEXF yet)
     
     let mut graph := graphInit
     let modulesWithSorry := if args.hasFlag "mark-sorry" then ImportGraph.allModulesWithSorry env else ∅
@@ -174,10 +211,6 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
         isPrefixOf `Mathlib.Mathport n ∨
         isPrefixOf `Mathlib.Util n)
       graph := graph.filterGraph filterMathlibMeta (replacement := `«Mathlib.Tactics»)
-    if !args.hasFlag "show-transitive" && !(match args.flag? "mode" with
-      | some m => (m.as! String).toLower ∈ ["proof-deps", "logic"]
-      | none => false) then
-      graph := graph.transitiveReduction
 
     let markedPackage : Option Name := if args.hasFlag "mark-package" then toModule else none
 
@@ -267,12 +300,19 @@ def graph : Cmd := `[Cli|
 
   FLAGS:
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures'."
     "include-aux";             "Include auxiliary definitions (recursors, internal names, etc.). Default: exclude."
     "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
 >>>>>>> 43b41dd (renamed to make graph about structures more clear)
     "show-transitive";         "Show transitively redundant edges."
+=======
+    "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures', 'unified'."
+    "include-aux";             "Include auxiliary definitions (recursors, internal names, etc.). Default: exclude."
+    "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
+    "mathematical";            "Filter out ubiquitous constants (Eq, rfl, Nat, etc.) to provide a cleaner mathematical map."
+>>>>>>> e03d90e (added unified graph and streamlined infrastructure)
     "to" : Array ModuleName;   "Only show the upstream imports of the specified modules."
     "from" : Array ModuleName; "Only show the downstream dependencies of the specified modules."
     "exclude-meta";            "Exclude any files starting with `Mathlib.[Tactic|Lean|Util|Mathport]`."

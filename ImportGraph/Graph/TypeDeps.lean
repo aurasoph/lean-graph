@@ -7,7 +7,7 @@ module
 
 public import Lean.Environment
 public import Lean.CoreM
-import ImportGraph.Graph.FilterCommon
+public import ImportGraph.Graph.FilterCommon
 import Lean.Data.NameMap.Basic
 import Lean.Meta.Match.MatcherInfo
 import Lean.Structure
@@ -20,43 +20,28 @@ open Lean Meta
 This module constructs a dependency graph based on type signatures.
 For each constant, we extract all constants mentioned in its type signature.
 
-This is useful for understanding the "blueprint" of dependencies - what types
-are needed to even state a theorem or definition, independent of its proof.
-
-## Instance Filtering (Default: ON)
-
-By default, typeclass instances are filtered out unless `--include-instances` is used.
-Instances create "star patterns" and are mechanically derived from type definitions.
-Use `--include-instances` to restore instance nodes.
+Provides tiered filtering via `FilterTier`.
 -/
 
 namespace Lean.Environment
 
 /-- 
 Extract type dependencies: all constants mentioned in the type signature.
-For structures/classes, also includes parent structures as dependencies.
 -/
-private def getTypeDependencies (env : Environment) (name : Name) (info : ConstantInfo) : Array Name :=
-  let typeDeps := info.type.getUsedConstants
-  
-  -- For structures, also include parent structures as dependencies  
-  if let some structInfo := Lean.getStructureInfo? env name then
-    let parents := structInfo.parentInfo.map (·.structName)
-    typeDeps ++ parents
-  else 
-    typeDeps
+private def getTypeDependencies (_env : Environment) (_name : Name) (info : ConstantInfo) : Array Name :=
+  info.type.getUsedConstants
 
 /-- Build type dependency graph based on constant type signatures. -/
 public def typeDepsGraph (env : Environment) 
-    (includeAux : Bool := false) (includeInstances : Bool := false) :
+    (tier : FilterTier := .standard) (includeInstances : Bool := false) :
     CoreM (NameMap (Array Name)) := do
   let mut graph : NameMap (Array Name) := {}
   
   for (name, info) in env.constants.toList do
-    let shouldInclude ← shouldIncludeConstant env name includeAux includeInstances
+    let shouldInclude ← shouldIncludeConstant env name tier includeInstances
     if shouldInclude then
       let deps := getTypeDependencies env name info
-      let processedDeps ← applyTransitiveClosure env deps includeAux includeInstances
+      let processedDeps ← applyTransitiveClosure env deps tier includeInstances
       graph := graph.insert name processedDeps
   
   return graph

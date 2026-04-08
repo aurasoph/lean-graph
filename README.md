@@ -21,7 +21,7 @@ All graphs are located in the `mathlib_graphs/` directory:
 | File | Size | Nodes | Edges | Description |
 |------|------|-------|-------|-------------|
 | **mathlib_imports.dot** | 3.1M | ~10K | ~27K | Module-level import dependencies |
-| **mathlib_structures.dot** | 160K | ~1K | ~1.5K | Typeclass/structure inheritance hierarchy |
+| **mathlib_structures.dot** | 836K | 4,897 | 8,503 | Typeclass/structure inheritance hierarchy (with field dependencies) |
 | **mathlib_type_deps.dot** | 135M | ~373K | ~1.7M | Type signature dependencies |
 | **mathlib_proof_deps.dot** | 544M | ~387K | ~8.2M | Proof body dependencies |
 
@@ -37,10 +37,17 @@ All graphs are located in the `mathlib_graphs/` directory:
 - **Edges**: Module A → Module B means "B imports A"
 
 ### 2. Structures Graph (`mathlib_structures.dot`)
-**Typeclass and structure inheritance**
+**Typeclass and structure inheritance with field dependencies**
 
-- **Nodes**: Structures/classes that extend other structures (e.g., Group, Ring, Field)
-- **Edges**: Parent → Child (e.g., `Monoid → Group` means "Group extends Monoid")
+- **Nodes**: All structures with any relations (4,897 nodes)
+  - Structures with parent structures (extends relationships)
+  - Structures with field/parameter dependencies
+  - Structures that are referenced by others
+- **Edges**: Parent → Child, including both `extends` relationships AND field/parameter dependencies
+  - Example: `Monoid → Group` (Group extends Monoid)
+  - Example: `TopologicalSpace → T0Space` (T0Space has TopologicalSpace as parameter)
+  - Example: `Group → NormedGroup` (NormedGroup has Group as a field)
+- **Includes**: Leaf nodes (structures referenced by others but with no dependencies themselves)
 
 ### 3. Type-Deps Graph (`mathlib_type_deps.dot`)
 **Type signature dependencies**
@@ -133,6 +140,35 @@ This is a text-based format that can be:
 - Visualized with Graphviz tools
 - Analyzed with graph libraries (NetworkX, igraph, etc.)
 - Converted to other formats (GraphML, JSON, etc.)
+
+## Regenerating Mathlib Graphs
+
+To reproduce the graphs in `mathlib_graphs/`, run these commands exactly.
+
+### Flag Explanations
+*   `--to Mathlib`: Limit graph to nodes defined within the Mathlib package.
+*   `--include-deps`: Include dependencies from other packages (Aesop, Std, etc.).
+*   `--include-lean`: Include core Lean types (Nat, Eq, List, etc.) from `Init` and `Lean`.
+
+### Exact Commands
+```bash
+# 1. Structures Graph
+lake exe graph --mode structures --to Mathlib --include-lean --include-deps mathlib_structures.dot
+
+# 2. Imports Graph
+lake exe graph --to Mathlib --include-lean --include-deps mathlib_imports.dot
+
+# 3. Type-Deps Graph (Blueprint)
+lake exe graph --mode type-deps --to Mathlib --include-lean --include-deps mathlib_type_deps.dot
+
+# 4. Proof-Deps Graph (Logic)
+lake exe graph --mode proof-deps --to Mathlib --include-lean --include-deps mathlib_proof_deps.dot
+
+# 5. Unified Graph
+lake exe graph --mode unified --to Mathlib --include-lean --include-deps mathlib_unified.dot
+```
+
+Generation of `proof-deps` for full Mathlib can take significant time. Other graph modes are much faster.
 
 ## License
 

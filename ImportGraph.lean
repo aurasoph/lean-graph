@@ -3,7 +3,11 @@ module
 public import ImportGraph.Export.DotFile
 public import ImportGraph.Export.Gexf
 public import ImportGraph.Graph.Filter
+public import ImportGraph.Graph.ProofDeps
+public import ImportGraph.Graph.Structures
 public import ImportGraph.Graph.TransitiveClosure
+public import ImportGraph.Graph.TypeDeps
+public import ImportGraph.Graph.Unified
 public import ImportGraph.Imports.FromSource
 public import ImportGraph.Imports.ImportGraph
 public import ImportGraph.Imports.Redundant

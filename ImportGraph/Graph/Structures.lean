@@ -9,37 +9,38 @@ public import Lean.Environment
 public import Lean.CoreM
 import Lean.Data.NameMap.Basic
 import Lean.Structure
+public import ImportGraph.Graph.FilterCommon
 
 open Lean
 
-/-
-Structure inheritance graph showing parent-child relationships
-between structures and typeclasses, including field/parameter dependencies.
+/-!
+# Structure and Typeclass Relationship Graph
+
+Captures two types of relationships:
+1. **Extends**: Explicit inheritance (A extends B)
+2. **Field**: Semantic composition (A has a field/parameter of type B)
 -/
 
 namespace Lean.Environment
 
+/-- Result of structure analysis -/
+public structure StructureAnalysis where
+  extendsEdges : NameMap (Array Name)
+  fieldEdges : NameMap (Array Name)
+  allNodes : NameSet
+  deriving Inhabited
+
 /--
 Get the parent structures of a structure/class by examining its structure info.
-Returns an array of parent structure names.
 -/
 private def getParentStructures (env : Environment) (structName : Name) : Array Name := Id.run do
   if let some info := Lean.getStructureInfo? env structName then
-    -- parentInfo contains the parent structures
     return info.parentInfo.map (·.structName)
   else
     return #[]
 
 /--
-Check if a name is a private/internal declaration that should be filtered
-from the structures graph.
--/
-private def isPrivateDeclaration (name : Name) : Bool :=
-  name.isInternalDetail
-
-/--
-Extract structure/class names from an expression by walking its structure.
-This is a simple syntactic traversal without full type inference.
+Extract structure/class names from an expression.
 -/
 private def extractStructuresFromExpr (env : Environment) (e : Expr) : NameSet := 
   let rec walk (expr : Expr) (acc : NameSet) : NameSet :=
@@ -60,68 +61,68 @@ private def extractStructuresFromExpr (env : Environment) (e : Expr) : NameSet :
 
 /--
 Extract field/parameter dependencies from a structure's constructor type.
-Walks the constructor signature to find structure/class references in field types.
 -/
 private def getFieldDependencies (env : Environment) (structName : Name) : Array Name := Id.run do
-  -- Try to access the constructor's type
   let ctorName := structName.append `mk
   match env.find? ctorName with
   | none => return #[]
   | some info =>
-    -- Extract structure names from the constructor type expression
     let fieldStructs := extractStructuresFromExpr env info.type
-    -- Remove the structure itself to avoid self-loops
+    -- Remove the structure itself and its parents to get "pure" field dependencies
+    let parents := getParentStructures env structName |>.foldl (init := NameSet.empty) (·.insert ·)
     let filtered := fieldStructs.erase structName
+    let filtered := parents.foldl (init := filtered) (·.erase ·)
     return filtered.toArray
 
 /--
-Build the structure/typeclass inheritance graph.
-
-For each structure in the environment with parent structures, create edges.
-This captures the inheritance relationships for both typeclasses and regular structures,
-and includes field/parameter dependencies.
-
-Parameters:
-- `env`: The Lean environment to analyze
-
-Returns a `NameMap (Array Name)` where:
-- Key: A structure name that has parents or field dependencies
-- Value: Array of parent structure names and field dependencies (deduplicated)
+Build the structure/typeclass relationship graph, distinguishing between
+inheritance (extends) and composition (fields).
 -/
-public def structuresGraph (env : Environment) : CoreM (NameMap (Array Name)) := do
-  let mut graph : NameMap (Array Name) := {}
-  let mut allReferencedStructures : NameSet := {}
+public def analyzeStructures (env : Environment) (tier : FilterTier := .standard) : CoreM StructureAnalysis := do
+  let mut extendsEdges : NameMap (Array Name) := {}
+  let mut fieldEdges : NameMap (Array Name) := {}
+  let mut allNodes : NameSet := {}
   
-  -- First pass: collect all structures and their dependencies
-  let mut structureDeps : NameMap (Array Name) := {}
   for (name, _) in env.constants.toList do
-    if isPrivateDeclaration name then continue
+    if !(← shouldIncludeConstant env name tier true) then continue
     
     if let some _sinfo := Lean.getStructureInfo? env name then
-      let parents := getParentStructures env name
-      let fields := getFieldDependencies env name
-      let allDeps := (parents ++ fields).foldl (init := NameSet.empty) (·.insert ·)
-      let filteredDeps : Array Name := allDeps.toArray.filter (!isPrivateDeclaration ·)
+      allNodes := allNodes.insert name
       
-      if filteredDeps.size > 0 then
-        structureDeps := structureDeps.insert name filteredDeps
-        -- Track all structures that are referenced
-        for dep in filteredDeps do
-          allReferencedStructures := allReferencedStructures.insert dep
+      -- 1. Inheritance edges
+      let parents := getParentStructures env name
+      let filteredParents ← applyTransitiveClosure env parents tier true
+      if filteredParents.size > 0 then
+        extendsEdges := extendsEdges.insert name filteredParents
+        for p in filteredParents do allNodes := allNodes.insert p
+      
+      -- 2. Field dependencies
+      let fields := getFieldDependencies env name
+      let filteredFields ← applyTransitiveClosure env fields tier true
+      if filteredFields.size > 0 then
+        fieldEdges := fieldEdges.insert name filteredFields
+        for f in filteredFields do allNodes := allNodes.insert f
   
-  -- Second pass: include all structures that have dependencies OR are dependencies of others
-  for (name, _) in env.constants.toList do
-    if isPrivateDeclaration name then continue
+  return { extendsEdges := extendsEdges, fieldEdges := fieldEdges, allNodes := allNodes }
+
+/-- Compatibility wrapper for the old structuresGraph API -/
+public def structuresGraph (env : Environment) (tier : FilterTier := .standard) : CoreM (NameMap (Array Name)) := do
+  let analysis ← analyzeStructures env tier
+  let mut combined : NameMap (Array Name) := {}
+  
+  -- Initialize with all nodes found (including leaf nodes)
+  for name in analysis.allNodes.toList do
+    combined := combined.insert name #[]
     
-    if let some _sinfo := Lean.getStructureInfo? env name then
-      -- Include if: (1) has outgoing deps, OR (2) is referenced by others
-      if structureDeps.contains name || allReferencedStructures.contains name then
-        if let some deps := structureDeps.find? name then
-          graph := graph.insert name deps
-        else
-          -- Referenced by others but has no outgoing deps - add with empty deps
-          graph := graph.insert name #[]
-  
-  return graph
+  -- Add extends edges
+  for (name, parents) in analysis.extendsEdges.toList do
+    combined := combined.insert name parents
+    
+  -- Merge field edges
+  for (name, fields) in analysis.fieldEdges.toList do
+    let existing := combined.find? name |>.getD #[]
+    combined := combined.insert name ((existing ++ fields).toList.eraseDups.toArray)
+    
+  return combined
 
 end Lean.Environment

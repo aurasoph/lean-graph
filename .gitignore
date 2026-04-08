@@ -1,9 +1,5 @@
-/build
-/lakefile.olean
-/lake-packages/*
-.lake/
-html-template/imports.gexf
 
+<<<<<<< HEAD
 graph.pdf
 
 **/.DS_Store
@@ -14,27 +10,38 @@ graph.pdf
 # But allow the Mathlib graphs in mathlib_graphs/ and the test reference file
 *.dot
 !mathlib_graphs/*.dot
+=======
+>>>>>>> e03d90e (added unified graph and streamlined infrastructure)
 !ImportGraphTest/expected.dot
-
+!mathlib_graphs/*.dot
+# But allow the Mathlib graphs in mathlib_graphs/ and the test reference file
+# CLI test artifacts  
+# Documentation directory - allow GitHub Pages docs/
+# Files without extensions in test directory (likely artifacts)
+# Generated graph files - exclude test artifacts
+# Instance tests and other temporary files
 # Other generated outputs
+# Text output files
+# Web explorer directory - allow for interactive visualization
+# docs/
+# web-explorer/__pycache__/
+**/.DS_Store
+*.dot
 *.gexf
 *.html
-
-# Text output files
 *.txt
-
-# CLI test artifacts  
 --help
---mode
 --include-*
-
-# Instance tests and other temporary files
-InstanceTest
-type-deps
-
-# Files without extensions in test directory (likely artifacts)
+--mode
+.lake/
+/build
+/lake-packages/*
+/lakefile.olean
+GRAPH_DESIGN_GUIDE.md
+GRAPH_VALIDATION_TESTS.md
 ImportGraphTest/FileWithTransitiveImports
 ImportGraphTest/Used
+<<<<<<< HEAD
 
 <<<<<<< HEAD
 # Documentation directory (intentionally excluded - working notes)
@@ -60,5 +67,13 @@ web-explorer/
 <<<<<<< HEAD
 >>>>>>> 6e18788 (probably fixed now)
 =======
+=======
+InstanceTest
+global_corpus.db
+graph.pdf
+graph_variants/
+html-template/imports.gexf
+type-deps
+>>>>>>> e03d90e (added unified graph and streamlined infrastructure)
 web-explorer/server.log
 >>>>>>> 7b2cba4 (i want to be a monk)

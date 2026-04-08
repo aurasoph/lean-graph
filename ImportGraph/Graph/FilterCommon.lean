@@ -20,24 +20,38 @@ open Lean Meta
 Shared filtering utilities used by TypeDeps and ProofDeps graphs to identify
 and filter mechanical/compiler-generated declarations.
 
-Uses official Lean Environment APIs to detect auto-generated declarations:
-- `isAuxRecursor`: Detects .rec, .recOn, .casesOn, .brecOn
-- `isNoConfusion`: Detects .noConfusion, .noConfusionType
-- `isProjectionFn`: Detects structure field accessors
-- `isMatcherCore`: Detects pattern matchers (.match_1, .match_2, etc.)
+Provides tiered filtering:
+- **Exhaustive**: Includes everything except strictly internal compiler details.
+- **Standard**: Filters auxiliary, mechanical, and generated declarations (default).
+- **Mathematical**: Optional tier that also filters ubiquitous boilerplate (Eq, rfl, etc.).
 -/
 
 namespace Lean.Environment
 
+/-- Filtering tiers for dependency graphs -/
+public inductive FilterTier where
+  | exhaustive   -- Include everything possible
+  | standard     -- Filter auxiliary/generated/mechanical (default)
+  | mathematical -- Filter ubiquitous boilerplate (Eq, rfl, etc.)
+  deriving Inhabited, BEq
+
+/-- 
+Ubiquitous constants that create noise in mathematical graphs.
+These are primarily filtered in the `mathematical` tier.
+-/
+def ubiquitousConstants : NameSet := 
+  [`Eq, `rfl, `HEq, `id, `Unit, `True, `False, `And, `Or, `Not,
+   `Nat, `Int, `String, `Char, `Bool, `List, `Option, `Sum,
+   `Exists, `Subsingleton, `Decidable, `Inhabited, `Nonempty,
+   `PUnit, `PTrue, `PFalse, `PLift, `ULift,
+   `Add, `Mul, `Neg, `Inv, `Div, `Sub, `HMul, `HAdd, `HSub, `HDiv, `HPow,
+   `LE, `LT, `GE, `GT, `HLE, `HLT, `HGE, `HGT,
+   `OfNat, `OfNat.ofNat, `BEq, `LawfulBEq,
+   `Lean.Parser.Tactic.next, `Lean.Parser.Tactic.done
+  ].foldl (fun acc n => acc.insert n) ∅
+
 /--
 Determine if a constant name represents a mechanical/compiler-generated declaration.
-These declarations provide no mathematical insight and create noise in dependency analysis.
-
-Filtered patterns:
-- `.eq_def` - definitional equality lemmas
-- `.eq_1`, `.eq_2`, etc. - equation lemmas  
-- `.sizeOf_spec` - termination checker artifacts
-- `.ctorIdx`, `_ctorIdx` - runtime constructor indices
 -/
 public def isMechanicalDeclaration (name : Name) : Bool :=
   match name with
@@ -45,169 +59,109 @@ public def isMechanicalDeclaration (name : Name) : Bool :=
   | .str _ "sizeOf_spec" => true
   | .str _ "ctorIdx" => true
   | .str _ suffix => 
-    -- Check for .eq_N pattern (e.g., eq_1, eq_2) or _ctorIdx
     (suffix.startsWith "eq_" && (suffix.drop 3).all Char.isDigit && suffix.length > 3) ||
-    suffix == "_ctorIdx"
+    suffix == "_ctorIdx" ||
+    suffix == "_sunsafe" ||
+    suffix == "_cstage1" ||
+    suffix == "_cstage2"
   | _ => false
 
 /--
 Get the "parent" declaration for a mechanical/auto-generated declaration.
-Used for transitive closure - when filtering `List.length.eq_def`, we redirect
-to a dependency on `List.length` instead.
-
-Also handles constructors and recursors:
-- `Foo.mk` → `Foo` (structure constructor)
-- `Foo.rec` → `Foo` (recursor)
-
-Examples:
-- `List.length.eq_def` → `List.length`
-- `UInt16.ofBitVec.sizeOf_spec` → `UInt16.ofBitVec`
-- `Color.ctorIdx` → `Color`
-- `AList.mk` → `AList`
-- `Monad.rec` → `Monad`
 -/
 public def getParentDeclaration (env : Environment) (name : Name) : Name :=
-  -- Check if it's a constructor or recursor
   if let some info := env.find? name then
     match info with
-    | .ctorInfo val => val.induct  -- Get the inductive type
-    | .recInfo val => val.name.getPrefix  -- Remove .rec suffix
+    | .ctorInfo val => val.induct
+    | .recInfo val => val.name.getPrefix
     | _ => 
-      -- Handle mechanical patterns
       match name with
       | .str parent "eq_def" => parent
       | .str parent "sizeOf_spec" => parent
       | .str parent "ctorIdx" => parent
       | .str parent "_ctorIdx" => parent
       | .str parent suffix =>
-        -- Handle .eq_N pattern (e.g., eq_1, eq_2)
         if suffix.startsWith "eq_" && (suffix.drop 3).all Char.isDigit && suffix.length > 3 then
           parent
         else
           name
       | _ => name
   else
-    -- Fallback to pattern matching if not in environment
-    match name with
-    | .str parent "eq_def" => parent
-    | .str parent "sizeOf_spec" => parent
-    | .str parent "ctorIdx" => parent
-    | .str parent "_ctorIdx" => parent
-    | .str parent suffix =>
-      -- Handle .eq_N pattern (e.g., eq_1, eq_2)
-      if suffix.startsWith "eq_" && (suffix.drop 3).all Char.isDigit && suffix.length > 3 then
-        parent
-      else
-        name
-    | _ => name
+    name
 
 /--
-Heuristic to detect if a name is likely a typeclass instance.
-Used as fallback since Meta.isInstance doesn't work with importModules
-(the instance extension state isn't populated when loading compiled modules).
-
-Detection pattern:
-- Name starts with "inst" (Lean's convention: instBEq, instInhabited, etc.)
-- OR name contains ".inst" (namespaced: Foo.instBar)
+Detect if a name is likely a typeclass instance.
 -/
-private def isLikelyInstance (name : Name) : Bool :=
+public def isLikelyInstance (name : Name) : Bool :=
   let s := name.toString
   s.startsWith "inst" || (s.splitOn ".inst").length > 1
 
-/-- Check if a constant should be included in dependency graphs. -/
+/-- Check if a constant should be included in dependency graphs based on tier. -/
 public def shouldIncludeConstant (env : Environment) (name : Name) 
-    (includeAux : Bool) (includeInstances : Bool) : CoreM Bool := do
-  -- Always filter mechanical declarations (equation lemmas, sizeOf, etc.)
-  if isMechanicalDeclaration name then
-    return false
-    
-  if includeAux && includeInstances then
-    return true
+    (tier : FilterTier := .standard) (includeInstances : Bool := false) : CoreM Bool := do
   
-  -- Check for auxiliary/generated declarations using official Lean APIs
-  if !includeAux then
-    -- Check if it's a constructor (auto-generated by inductive/structure)
+  -- Always filter internal details in all tiers
+  if name.isInternalDetail then return false
+  
+  match tier with
+  | .exhaustive => return true
+  
+  | .standard =>
+    if isMechanicalDeclaration name then return false
+    
     if let some info := env.find? name then
       match info with
-      | .ctorInfo _ => return false  -- Filter constructors (.mk and named constructors)
-      | .recInfo _ => return false   -- Filter recursors (.rec)
+      | .ctorInfo _ | .recInfo _ => return false
       | _ => pure ()
     
-    -- Use Environment.isAuxRecursor for .recOn, .casesOn, .brecOn
-    if isAuxRecursor env name then
+    if isAuxRecursor env name || isNoConfusion env name || 
+       isProjectionFn env name || isMatcherCore env name then
       return false
+      
+    if !includeInstances && isLikelyInstance name then
+      return false
+      
+    return true
     
-    -- Use Environment.isNoConfusion for .noConfusion and .noConfusionType
-    if isNoConfusion env name then
-      return false
+  | .mathematical =>
+    -- Inline the standard checks to avoid recursion/termination issues
+    if isMechanicalDeclaration name then return false
     
-    -- Use Environment.isProjectionFn for field accessors (e.g., Point.x, Point.y)
-    if isProjectionFn env name then
-      return false
+    if let some info := env.find? name then
+      match info with
+      | .ctorInfo _ | .recInfo _ => return false
+      | _ => pure ()
     
-    -- Use Environment.isMatcherCore for pattern matchers (.match_1, .match_2, etc.)
-    if isMatcherCore env name then
+    if isAuxRecursor env name || isNoConfusion env name || 
+       isProjectionFn env name || isMatcherCore env name then
       return false
-    
-    -- Fallback: check for internal details (_cstage1, _unsafe, etc.)
-    if name.isInternalDetail then
-      return false
-  
-  -- Check for typeclass instances
-  -- Note: Meta.isInstance doesn't work with importModules (extension state not loaded),
-  -- so we rely on heuristic based on Lean's instance naming convention.
-  -- Removed Meta.isInstance call since it hangs on certain constants and always returns false anyway.
-  if !includeInstances then
-    if isLikelyInstance name then 
-      return false
-  
-  return true
+      
+    -- Mathematical tier specific filters
+    if ubiquitousConstants.contains name then return false
+    if isLikelyInstance name then return false
+      
+    return true
 
-/-- Check if a name is an auto-generated helper lemma.
-These are kernel-generated lemmas like injectivity, recursors, etc.
-They should be excluded from proof dependency graphs as they're not user-proven theorems.
--/
+/-- Check if a name is an auto-generated helper lemma. -/
 private def isAutoGeneratedLemma (name : Name) : Bool :=
   let str := name.toString
-  -- Auto-generated lemma patterns
-  str.endsWith ".inj" ||
-  str.endsWith ".injEq" ||
-  str.endsWith ".sizeOf_spec" ||
-  str.endsWith ".rec" ||
-  str.endsWith ".recOn" ||
-  str.endsWith ".casesOn" ||
-  str.endsWith ".brecOn" ||
-  str.endsWith ".noConfusion" ||
-  str.endsWith ".below" ||
+  str.endsWith ".inj" || str.endsWith ".injEq" || str.endsWith ".sizeOf_spec" ||
+  str.endsWith ".rec" || str.endsWith ".recOn" || str.endsWith ".casesOn" ||
+  str.endsWith ".brecOn" || str.endsWith ".noConfusion" || str.endsWith ".below" ||
   str.endsWith ".ibelow"
 
-/-- Check if a constant should be included in proof dependency graphs specifically. 
-    
-Note: Axioms ARE included as they are foundational nodes that other proofs depend on.
-They will naturally be roots (no outgoing edges) since nothing is used to prove them.
-
-Auto-generated helper lemmas (.inj, .recOn, etc.) are excluded as they're not user-proven.
-Structure field projections (even theorem-valued ones) are excluded as they're just
-accessors to bundled proofs, not actual theorem proving.
--/
+/-- Check if a constant should be included in proof dependency graphs. -/
 public def shouldIncludeConstantInProofDeps (env : Environment) (name : Name) 
-    (includeAux : Bool) (includeInstances : Bool) : CoreM Bool := do
-  -- First apply general filtering (which excludes projections)
-  let generalInclude ← shouldIncludeConstant env name includeAux includeInstances
-  if !generalInclude then
-    return false
+    (tier : FilterTier := .standard) (includeInstances : Bool := false) : CoreM Bool := do
   
-  -- Exclude auto-generated helper lemmas
-  if isAutoGeneratedLemma name then
-    return false
+  let generalInclude ← shouldIncludeConstant env name tier includeInstances
+  if !generalInclude then return false
   
-  -- Additional filtering for proof-deps: exclude types that don't belong in proof graphs
+  if isAutoGeneratedLemma name then return false
+  
   if let some info := env.find? name then
     match info with
-    | .inductInfo _ => return false  -- Inductives are types, not proofs
-    | .opaqueInfo _ => return false  -- Opaque constants don't expose proofs
-    | .quotInfo _ => return false    -- Quotient types are types, not proofs
-    -- Axioms ARE included - they're foundational assumptions that proofs depend on
+    | .inductInfo _ | .opaqueInfo _ | .quotInfo _ => return false
     | .axiomInfo _ => return true
     | _ => return true
   else
@@ -215,25 +169,22 @@ public def shouldIncludeConstantInProofDeps (env : Environment) (name : Name)
 
 /--
 Apply transitive closure when filtering dependencies.
-For filtered auto-generated declarations, redirect to their parent declaration.
-Handles: constructors, recursors, mechanical declarations, field accessors, etc.
 -/
 public def applyTransitiveClosure (env : Environment) (deps : Array Name) 
-    (includeAux : Bool) (includeInstances : Bool) : CoreM (Array Name) := do
+    (tier : FilterTier := .standard) (includeInstances : Bool := false) : CoreM (Array Name) := do
   let mut result : Array Name := #[]
   let mut seen : NameSet := {}
   
   for dep in deps do
-    let shouldInclude ← shouldIncludeConstant env dep includeAux includeInstances
+    let shouldInclude ← shouldIncludeConstant env dep tier includeInstances
     if shouldInclude then
       if !seen.contains dep then
         result := result.push dep
         seen := seen.insert dep
     else
-      -- Dependency is filtered - try to redirect to parent
       let parent := getParentDeclaration env dep
       if parent != dep && env.contains parent then
-        let parentOk ← shouldIncludeConstant env parent includeAux includeInstances
+        let parentOk ← shouldIncludeConstant env parent tier includeInstances
         if parentOk && !seen.contains parent then
           result := result.push parent
           seen := seen.insert parent
@@ -242,26 +193,18 @@ public def applyTransitiveClosure (env : Environment) (deps : Array Name)
 
 /--
 Apply transitive closure specifically for proof dependency graphs.
-Uses shouldIncludeConstantInProofDeps to filter, which excludes inductives, etc.
-When a dependency is filtered out, recursively follows its dependencies to find
-what should actually be included in the proof dependency graph.
 -/
 public def applyTransitiveClosureForProofDeps (env : Environment) (deps : Array Name) 
-    (includeAux : Bool) (includeInstances : Bool) : CoreM (Array Name) := do
+    (tier : FilterTier := .standard) (includeInstances : Bool := false) : CoreM (Array Name) := do
   let mut result : Array Name := #[]
   let mut seen : NameSet := {}
   
-  -- Helper function to find includable dependencies recursively
-  -- Use a depth limit to ensure termination
   let rec findIncludableDeps (dep : Name) (visited : NameSet) (depth : Nat) : CoreM (Array Name) := do
-    if depth = 0 || visited.contains dep then
-      return #[] -- Avoid cycles and limit recursion depth
+    if depth = 0 || visited.contains dep then return #[]
     
-    let shouldInclude ← shouldIncludeConstantInProofDeps env dep includeAux includeInstances
-    if shouldInclude then
-      return #[dep]
+    let shouldInclude ← shouldIncludeConstantInProofDeps env dep tier includeInstances
+    if shouldInclude then return #[dep]
     
-    -- Dependency is filtered - get its own dependencies and recurse
     let newVisited := visited.insert dep
     let mut subResult : Array Name := #[]
     
@@ -269,8 +212,7 @@ public def applyTransitiveClosureForProofDeps (env : Environment) (deps : Array 
       let subDeps := match info with
       | .thmInfo val => val.value.getUsedConstants
       | .defnInfo val => val.value.getUsedConstants
-      | .axiomInfo _ => #[] -- Axioms have no dependencies
-      | _ => #[] -- Other types don't have proof dependencies we care about
+      | _ => #[]
       
       if depth > 0 then
         for subDep in subDeps do
@@ -281,7 +223,6 @@ public def applyTransitiveClosureForProofDeps (env : Environment) (deps : Array 
   termination_by depth
   
   for dep in deps do
-    -- Increase recursion depth limit - the previous limit of 10 was too restrictive
     let includableDeps ← findIncludableDeps dep {} 50
     for includableDep in includableDeps do
       if !seen.contains includableDep then
