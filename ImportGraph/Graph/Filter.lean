@@ -18,16 +18,6 @@ This file defines some functions to filter a graph.
 
 namespace Lean.NameMap
 
-/--
-Compute the transitive reduction of an import graph.
-
-Typical usage is `transitiveReduction (← importGraph)`.
--/
-public def transitiveReduction (m : NameMap (Array Name)) : NameMap (Array Name) :=
-  let c := transitiveClosure m
-  m.foldl (fun r n a =>
-    r.insert n (a.foldr (fun i b => b.filter (fun j => ! ((c.find? i).getD {}).contains j)) a)) {}
-
 /-- Restrict an import graph to only the downstream dependencies of some set of modules. -/
 public def downstreamOf (m : NameMap (Array Name)) (targets : NameSet) : NameMap (Array Name) :=
   let tc := transitiveClosure m

@@ -1,42 +1,37 @@
-/build
-/lakefile.olean
-/lake-packages/*
-.lake/
-html-template/imports.gexf
 
-graph.pdf
-
-**/.DS_Store
-
-# Generated graph files - exclude test artifacts
-# But allow the Mathlib graphs in mathlib_graphs/ and the test reference file
-*.dot
-!mathlib_graphs/*.dot
 !ImportGraphTest/expected.dot
-
+!mathlib_graphs/*.dot
+# But allow the Mathlib graphs in mathlib_graphs/ and the test reference file
+# CLI test artifacts  
+# Documentation directory - allow GitHub Pages docs/
+# Files without extensions in test directory (likely artifacts)
+# Generated graph files - exclude test artifacts
+# Instance tests and other temporary files
 # Other generated outputs
+# Text output files
+# Web explorer directory - allow for interactive visualization
+# docs/
+# web-explorer/__pycache__/
+**/.DS_Store
+*.dot
 *.gexf
 *.html
-
-# Text output files
 *.txt
-
-# CLI test artifacts  
 --help
---mode
 --include-*
-
-# Instance tests and other temporary files
-InstanceTest
-type-deps
-
-# Files without extensions in test directory (likely artifacts)
+--mode
+.lake/
+/build
+/lake-packages/*
+/lakefile.olean
+GRAPH_DESIGN_GUIDE.md
+GRAPH_VALIDATION_TESTS.md
 ImportGraphTest/FileWithTransitiveImports
 ImportGraphTest/Used
-
-# Documentation directory - allow GitHub Pages docs/
-# docs/
-
-# Web explorer directory - allow for interactive visualization
-# web-explorer/__pycache__/
+InstanceTest
+global_corpus.db
+graph.pdf
+graph_variants/
+html-template/imports.gexf
+type-deps
 web-explorer/server.log
