@@ -5,9 +5,11 @@ class SQLiteDependencyExplorer {
     constructor() {
         this.currentGraph = 'structures';
         this.currentMode = 'search';
+        this.traversalDepth = 1;
         this.db = null;
         this.visibleNodes = new Set();
         this.visibleEdges = new Set();
+        this.nodeDistances = new Map(); // Track distance for coloring
         this.activeNode = null;
         
         this.simulation = null;
@@ -106,6 +108,21 @@ class SQLiteDependencyExplorer {
             
             this.setMode(mode);
         });
+
+        // Depth range slider
+        const depthRange = d3.select('#depth-range');
+        if (!depthRange.empty()) {
+            depthRange.on('input', () => {
+                const val = depthRange.node().value;
+                this.traversalDepth = parseInt(val);
+                d3.select('#depth-value').text(val);
+                
+                // If we have an active node, refresh the traversal
+                if (this.currentMode === 'traversal' && this.activeNode) {
+                    this.setActiveNode(this.activeNode);
+                }
+            });
+        }
         
         // Search input
         const searchInput = d3.select('.search-input');
@@ -150,25 +167,7 @@ class SQLiteDependencyExplorer {
         this.container.select('.loading').text('Loading graph database...');
         
         try {
-            // Check if running on GitHub Pages (no large files available)
-            const isGitHubPages = window.location.hostname.includes('github.io');
-            
-            if (isGitHubPages && (graphType === 'type-deps' || graphType === 'proof-deps')) {
-                // Show message for unavailable large graphs on GitHub Pages
-                this.container.select('.loading').html(`
-                    <div class="error">
-                        <strong>${graphType} graph not available on GitHub Pages</strong><br><br>
-                        Large graphs (${graphType === 'type-deps' ? '412MB' : '1.8GB'}) require local setup.<br><br>
-                        <strong>For complete experience:</strong><br>
-                        1. Clone repository: <code>git clone https://github.com/aurasoph/lean-graph.git</code><br>
-                        2. Run locally: <code>cd lean-graph/web-explorer && python3 -m http.server 8000</code><br>
-                        3. Open: <code>http://localhost:8000</code>
-                    </div>
-                `);
-                return;
-            }
-            
-            // Load database (works for all graphs locally)
+            // Load database
             this.container.select('.loading').text(`Loading ${graphType} database...`);
             const dbResponse = await fetch(`data/${graphType}.db`);
             
@@ -230,7 +229,7 @@ class SQLiteDependencyExplorer {
         } else {
             d3.select('#search-controls').style('display', 'none');
             d3.select('#traversal-controls').style('display', 'block');
-            d3.select('#mode-info').text('Click nodes to set active and view immediate neighbors');
+            d3.select('#mode-info').text('Click nodes to set active and view neighbors (up to depth K)');
         }
     }
     
@@ -260,7 +259,7 @@ class SQLiteDependencyExplorer {
                     suggestions.style('display', 'none');
                 });
             
-            // Highlight the match with different display based on match type
+            // Highlight the match
             const nodeText = node.label || node.id;
             const highlighted = this.highlightMatch(nodeText, query);
             item.html(highlighted);
@@ -272,19 +271,19 @@ class SQLiteDependencyExplorer {
     getSuggestedNodes(query) {
         const lowerQuery = query.toLowerCase();
         
-        // Strategy 1: Exact prefix matches (highest priority)
+        // Strategy 1: Exact prefix matches
         let exactMatches = this.queryDB(
             "SELECT id, label, 'exact' as match_type FROM nodes WHERE LOWER(id) LIKE ? LIMIT 3",
             [`${lowerQuery}%`]
         );
         
-        // Strategy 2: Contains matches for common math terms
+        // Strategy 2: Contains matches
         let containsMatches = this.queryDB(
             "SELECT id, label, 'contains' as match_type FROM nodes WHERE LOWER(id) LIKE ? AND LOWER(id) NOT LIKE ? LIMIT 4",
             [`%${lowerQuery}%`, `${lowerQuery}%`]
         );
         
-        // Strategy 3: Word boundary matches (e.g., "Add" matches "AddCommGroup")
+        // Strategy 3: Word boundary matches
         let wordMatches = this.queryDB(
             "SELECT id, label, 'word' as match_type FROM nodes WHERE LOWER(id) LIKE ? OR LOWER(id) LIKE ? OR LOWER(id) LIKE ? LIMIT 3",
             [`%${lowerQuery.charAt(0).toUpperCase() + lowerQuery.slice(1)}%`, 
@@ -292,49 +291,35 @@ class SQLiteDependencyExplorer {
              `%_${lowerQuery}%`]
         );
         
-        // Combine results, removing duplicates and prioritizing
         const allMatches = [...exactMatches, ...containsMatches, ...wordMatches];
         const uniqueMatches = Array.from(
             new Map(allMatches.map(item => [item.id, item])).values()
         );
         
-        // Sort by relevance: exact > word boundary > contains
         const priorityOrder = { 'exact': 1, 'word': 2, 'contains': 3 };
-        const result = uniqueMatches
-            .sort((a, b) => {
-                const priorityA = priorityOrder[a.match_type] || 4;
-                const priorityB = priorityOrder[b.match_type] || 4;
-                return priorityA - priorityB;
-            })
-            .slice(0, 8); // Limit to 8 suggestions
-            
-        return result;
+        return uniqueMatches
+            .sort((a, b) => (priorityOrder[a.match_type] || 4) - (priorityOrder[b.match_type] || 4))
+            .slice(0, 8);
     }
     
     highlightMatch(text, query) {
         const lowerText = text.toLowerCase();
         const lowerQuery = query.toLowerCase();
-        
         if (lowerText.includes(lowerQuery)) {
-            const startIndex = lowerText.indexOf(lowerQuery);
-            const endIndex = startIndex + query.length;
-            
-            return text.substring(0, startIndex) +
-                   `<strong style="color: #0d6efd;">${text.substring(startIndex, endIndex)}</strong>` +
-                   text.substring(endIndex);
+            const idx = lowerText.indexOf(lowerQuery);
+            return text.substring(0, idx) +
+                   `<strong style="color: #0d6efd;">${text.substring(idx, idx + query.length)}</strong>` +
+                   text.substring(idx + query.length);
         }
-        
         return text;
     }
     
     searchAndAdd(query) {
         if (!this.db) return;
-        
         const matches = this.queryDB(
             "SELECT id FROM nodes WHERE id = ? OR id LIKE ? LIMIT 1",
             [query, `%.${query}`]
         );
-        
         if (matches.length > 0) {
             this.addNode(matches[0].id);
         } else {
@@ -344,13 +329,10 @@ class SQLiteDependencyExplorer {
     
     addNode(nodeId, expandRelatives = true) {
         if (!this.db) return;
-        
-        // Check if node exists
         const nodeExists = this.queryDB("SELECT id FROM nodes WHERE id = ?", [nodeId]);
         if (nodeExists.length === 0) return;
         
         this.visibleNodes.add(nodeId);
-        
         if (expandRelatives) {
             if (this.currentMode === 'search') {
                 this.expandNeighbors(nodeId);
@@ -358,26 +340,16 @@ class SQLiteDependencyExplorer {
                 this.setActiveNode(nodeId);
             }
         }
-        
         this.render();
     }
     
     expandNeighbors(nodeId) {
-        // Add parent nodes (incoming edges)
-        const parents = this.queryDB(
-            "SELECT source FROM edges WHERE target = ?", 
-            [nodeId]
-        );
+        const parents = this.queryDB("SELECT source FROM edges WHERE target = ?", [nodeId]);
         parents.forEach(edge => {
             this.visibleNodes.add(edge.source);
             this.visibleEdges.add(`${edge.source}->${nodeId}`);
         });
-        
-        // Add child nodes (outgoing edges) 
-        const children = this.queryDB(
-            "SELECT target FROM edges WHERE source = ?",
-            [nodeId]
-        );
+        const children = this.queryDB("SELECT target FROM edges WHERE source = ?", [nodeId]);
         children.forEach(edge => {
             this.visibleNodes.add(edge.target);
             this.visibleEdges.add(`${nodeId}->${edge.target}`);
@@ -386,13 +358,43 @@ class SQLiteDependencyExplorer {
     
     setActiveNode(nodeId) {
         this.activeNode = nodeId;
-        
-        // In traversal mode, show only this node and its k=1 neighbors
         this.visibleNodes.clear();
         this.visibleEdges.clear();
+        this.nodeDistances.clear();
         
         this.visibleNodes.add(nodeId);
-        this.expandNeighbors(nodeId);
+        this.nodeDistances.set(nodeId, 0);
+        
+        // Multi-depth expansion using BFS
+        let currentLevelNodes = [nodeId];
+        for (let depth = 1; depth <= this.traversalDepth; depth++) {
+            let nextLevelNodes = [];
+            for (const node of currentLevelNodes) {
+                // Get parents
+                const parents = this.queryDB("SELECT source FROM edges WHERE target = ?", [node]);
+                parents.forEach(edge => {
+                    if (!this.visibleNodes.has(edge.source)) {
+                        this.visibleNodes.add(edge.source);
+                        this.nodeDistances.set(edge.source, depth);
+                        nextLevelNodes.push(edge.source);
+                    }
+                    this.visibleEdges.add(`${edge.source}->${node}`);
+                });
+                
+                // Get children
+                const children = this.queryDB("SELECT target FROM edges WHERE source = ?", [node]);
+                children.forEach(edge => {
+                    if (!this.visibleNodes.has(edge.target)) {
+                        this.visibleNodes.add(edge.target);
+                        this.nodeDistances.set(edge.target, depth);
+                        nextLevelNodes.push(edge.target);
+                    }
+                    this.visibleEdges.add(`${node}->${edge.target}`);
+                });
+            }
+            currentLevelNodes = nextLevelNodes;
+            if (currentLevelNodes.length === 0) break;
+        }
         
         d3.select('#active-node-display').text(`Active: ${nodeId}`);
         this.render();
@@ -400,13 +402,11 @@ class SQLiteDependencyExplorer {
     
     handleAction(action) {
         switch (action) {
-            case 'center-view':
-                this.centerView();
-                break;
-            
+            case 'center-view': this.centerView(); break;
             case 'clear':
                 this.visibleNodes.clear();
                 this.visibleEdges.clear();
+                this.nodeDistances.clear();
                 this.activeNode = null;
                 d3.select('#active-node-display').text('Active: None');
                 this.render();
@@ -417,10 +417,12 @@ class SQLiteDependencyExplorer {
     render() {
         if (!this.db || this.visibleNodes.size === 0) {
             d3.select('#graph-stats').text('0 nodes, 0 edges');
+            this.linkGroup.selectAll('line').remove();
+            this.nodeGroup.selectAll('circle').remove();
+            this.labelGroup.selectAll('text').remove();
             return;
         }
         
-        // Get node data from database
         const nodeIds = Array.from(this.visibleNodes);
         const placeholders = nodeIds.map(() => '?').join(',');
         const nodes = this.queryDB(
@@ -428,17 +430,20 @@ class SQLiteDependencyExplorer {
             nodeIds
         );
         
-        // Get edge data
+        // Add coordinates from simulation if they exist
+        nodes.forEach(n => {
+            const existing = this.simulation?.nodes().find(sn => sn.id === n.id);
+            if (existing) { n.x = existing.x; n.y = existing.y; }
+        });
+
         const edges = this.queryDB(
             `SELECT source, target FROM edges 
              WHERE source IN (${placeholders}) AND target IN (${placeholders})`,
             [...nodeIds, ...nodeIds]
         );
         
-        // Update stats
         d3.select('#graph-stats').text(`${nodes.length} nodes, ${edges.length} edges`);
         
-        // Create or update simulation
         if (!this.simulation) {
             this.simulation = d3.forceSimulation()
                 .force('link', d3.forceLink().id(d => d.id).distance(100))
@@ -447,23 +452,14 @@ class SQLiteDependencyExplorer {
                 .force('collision', d3.forceCollide().radius(30));
         }
         
-        // Update links
         const link = this.linkGroup.selectAll('line')
             .data(edges, d => `${d.source}->${d.target}`);
-        
         link.exit().remove();
+        const linkAll = link.enter().append('line').attr('class', 'link').merge(link);
         
-        const linkEnter = link.enter().append('line')
-            .attr('class', 'link');
-        
-        const linkAll = linkEnter.merge(link);
-        
-        // Update nodes
         const node = this.nodeGroup.selectAll('circle')
             .data(nodes, d => d.id);
-        
         node.exit().remove();
-        
         const nodeEnter = node.enter().append('circle')
             .attr('class', 'node')
             .attr('r', 8)
@@ -474,45 +470,36 @@ class SQLiteDependencyExplorer {
             .on('click', (event, d) => this.nodeClick(event, d));
         
         const nodeAll = nodeEnter.merge(node)
-            .classed('active', d => d.id === this.activeNode);
+            .classed('active', d => d.id === this.activeNode)
+            .attr('fill', d => {
+                if (d.id === this.activeNode) return '#28a745';
+                const dist = this.nodeDistances.get(d.id);
+                if (dist === 1) return '#17a2b8';
+                if (dist === 2) return '#ffc107';
+                if (dist === 3) return '#fd7e14';
+                return '#6c757d';
+            });
         
-        // Update labels
         const label = this.labelGroup.selectAll('text')
             .data(nodes, d => d.id);
-        
         label.exit().remove();
-        
-        const labelEnter = label.enter().append('text')
-            .attr('class', 'node-label')
+        const labelAll = label.enter().append('text').attr('class', 'node-label').merge(label)
             .text(d => d.label);
         
-        const labelAll = labelEnter.merge(label);
-        
-        // Update simulation
         this.simulation.nodes(nodes);
         this.simulation.force('link').links(edges);
         this.simulation.alpha(0.3).restart();
         
         this.simulation.on('tick', () => {
-            linkAll
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
-            
-            nodeAll
-                .attr('cx', d => d.x)
-                .attr('cy', d => d.y);
-            
-            labelAll
-                .attr('x', d => d.x)
-                .attr('y', d => d.y - 15);
+            linkAll.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                   .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+            nodeAll.attr('cx', d => d.x).attr('cy', d => d.y);
+            labelAll.attr('x', d => d.x).attr('y', d => d.y - 15);
         });
     }
     
     nodeClick(event, d) {
         event.stopPropagation();
-        
         if (this.currentMode === 'search') {
             this.addNode(d.id, true);
         } else {
@@ -522,43 +509,35 @@ class SQLiteDependencyExplorer {
     
     dragStart(event, d) {
         if (!event.active) this.simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
+        d.fx = d.x; d.fy = d.y;
     }
     
-    dragging(event, d) {
-        d.fx = event.x;
-        d.fy = event.y;
-    }
+    dragging(event, d) { d.fx = event.x; d.fy = event.y; }
     
     dragEnd(event, d) {
         if (!event.active) this.simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
+        d.fx = null; d.fy = null;
     }
     
     centerView() {
-        const svg = this.svg;
-        const width = svg.node().clientWidth;
-        const height = svg.node().clientHeight;
-        
-        svg.transition().duration(750).call(
+        const width = this.svg.node().clientWidth;
+        const height = this.svg.node().clientHeight;
+        this.svg.transition().duration(750).call(
             d3.zoom().transform,
             d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
         );
     }
     
     updateInstructions() {
-        const instructions = d3.select('.instructions');
+        const inst = d3.select('.instructions');
         if (this.currentMode === 'search') {
-            instructions.html('🖱️ <strong>Click</strong> nodes to expand • 🔍 <strong>Search</strong> to add nodes • 📌 <strong>Drag</strong> to move');
+            inst.html('🖱️ <strong>Click</strong> nodes to expand • 🔍 <strong>Search</strong> to add nodes • 📌 <strong>Drag</strong> to move');
         } else {
-            instructions.html('🖱️ <strong>Click</strong> to set active node • ➕ <strong>+ Parents/Children</strong> to expand • 📌 <strong>Drag</strong> to move');
+            inst.html('🖱️ <strong>Click</strong> to set active node • ⚙️ <strong>Adjust K</strong> to see neighbors • 📌 <strong>Drag</strong> to move');
         }
     }
 }
 
-// Initialize explorer when page loads
 document.addEventListener('DOMContentLoaded', () => {
     window.explorer = new SQLiteDependencyExplorer();
 });

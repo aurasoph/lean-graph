@@ -267,6 +267,7 @@
                 <button class="graph-btn" data-graph="imports">Imports</button>
                 <button class="graph-btn" data-graph="type-deps">Type Deps</button>
                 <button class="graph-btn" data-graph="proof-deps">Proof Deps</button>
+                <button class="graph-btn" data-graph="unified">Unified</button>
             </div>
         </div>
 
@@ -292,7 +293,14 @@
                     <strong>Click nodes to expand!</strong>
                 </div>
                 <div class="control-row" id="traversal-controls" style="display: none;">
-                    <strong id="active-node-display">Active: None</strong>
+                    <div style="margin-bottom: 10px;">
+                        <strong id="active-node-display">Active: None</strong>
+                    </div>
+                    <div>
+                        <label for="depth-range" style="font-weight: bold; margin-right: 5px;">Traversal Depth (K):</label>
+                        <span id="depth-value" style="font-weight: bold; color: #0d6efd;">1</span>
+                        <input type="range" id="depth-range" min="1" max="3" value="1" step="1" style="width: 100%; margin-top: 5px;">
+                    </div>
                 </div>
                 <div class="control-row">
                     <button class="control-btn" data-action="center-view">Center View</button>
