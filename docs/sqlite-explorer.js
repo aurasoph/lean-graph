@@ -164,8 +164,27 @@ class SQLiteDependencyExplorer {
     async loadGraph(graphType) {
         this.currentGraph = graphType;
         this.container.select('.loading').style('display', 'flex');
-        this.container.select('.loading').text('Loading graph database...');
-        
+
+        // Graphs too large to serve online — direct users to run locally
+        const LOCAL_ONLY = {
+            'type-deps':  'type-deps',
+            'proof-deps': 'proof-deps',
+        };
+        if (LOCAL_ONLY[graphType]) {
+            const mode = LOCAL_ONLY[graphType];
+            this.container.select('.loading').html(`
+                <div style="text-align:left; max-width:560px; line-height:1.6;">
+                    <strong>This graph is too large to serve online.</strong><br><br>
+                    Run it locally from your <a href="https://github.com/leanprover-community/mathlib4" target="_blank">mathlib4</a> checkout:
+                    <pre style="background:#f4f4f4; padding:10px; border-radius:4px; margin-top:8px; font-size:13px; overflow-x:auto;">cd /path/to/mathlib4
+lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
+                    Then convert <code>output.dot</code> to a SQLite database and load it here via the local dev server.
+                    See the <a href="https://github.com/aurasoph/lean-graph" target="_blank">README</a> for setup instructions.
+                </div>
+            `);
+            return;
+        }
+
         try {
             // Load database
             this.container.select('.loading').text(`Loading ${graphType} database...`);
