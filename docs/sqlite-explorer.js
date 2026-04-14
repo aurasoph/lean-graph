@@ -169,7 +169,11 @@ class SQLiteDependencyExplorer {
         try {
             // Load database
             this.container.select('.loading').text(`Loading ${graphType} database...`);
-            const dbResponse = await fetch(`data/${graphType}.db`);
+            const DB_URLS = {
+                'unified': 'https://github.com/aurasoph/lean-graph/releases/download/v1.0/unified.db'
+            };
+            const dbUrl = DB_URLS[graphType] ?? `data/${graphType}.db`;
+            const dbResponse = await fetch(dbUrl);
             
             if (!dbResponse.ok) {
                 throw new Error(`Failed to load ${graphType}.db: ${dbResponse.status}`);
