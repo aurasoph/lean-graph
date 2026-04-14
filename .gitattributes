@@ -2,3 +2,4 @@ mathlib_graphs/mathlib_type_deps.dot filter=lfs diff=lfs merge=lfs -text
 mathlib_graphs/mathlib_proof_deps.dot filter=lfs diff=lfs merge=lfs -text
 docs/data/proof-deps.* filter=lfs diff=lfs merge=lfs -text
 docs/data/type-deps.* filter=lfs diff=lfs merge=lfs -text
+docs/data/unified.db filter=lfs diff=lfs merge=lfs -text
