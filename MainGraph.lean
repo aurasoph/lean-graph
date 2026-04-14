@@ -59,9 +59,8 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
     let (graphInit, isConstantLevel, isUnifiedMode) ← match args.flag? "mode" with
       | some modeFlag =>
         let mode := (modeFlag.as! String).toLower
-        let tier : Environment.FilterTier := 
+        let tier : Environment.FilterTier :=
           if args.hasFlag "include-aux" then .exhaustive
-          else if args.hasFlag "mathematical" then .mathematical
           else .standard
         let includeInstances := args.hasFlag "include-instances"
         
@@ -91,9 +90,8 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
     
     -- Handle unified mode separately since it has a different type
     if isUnifiedMode then
-      let tier : Environment.FilterTier := 
+      let tier : Environment.FilterTier :=
         if args.hasFlag "include-aux" then .exhaustive
-        else if args.hasFlag "mathematical" then .mathematical
         else .standard
       let includeInstances := args.hasFlag "include-instances"
       let ctx := { options := {}, fileName := "<input>", fileMap := default }
@@ -285,7 +283,6 @@ def graph : Cmd := `[Cli|
     "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures', 'unified'."
     "include-aux";             "Include auxiliary definitions (recursors, internal names, etc.). Default: exclude."
     "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
-    "mathematical";            "Filter out ubiquitous constants (Eq, rfl, Nat, etc.) to provide a cleaner mathematical map."
     "to" : Array ModuleName;   "Only show the upstream imports of the specified modules."
     "from" : Array ModuleName; "Only show the downstream dependencies of the specified modules."
     "exclude-meta";            "Exclude any files starting with `Mathlib.[Tactic|Lean|Util|Mathport]`."
