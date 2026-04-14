@@ -30,7 +30,6 @@ ImportGraphTest/FileWithTransitiveImports
 ImportGraphTest/Used
 InstanceTest
 global_corpus.db
-docs/data/unified.db
 graph.pdf
 graph_variants/
 html-template/imports.gexf
