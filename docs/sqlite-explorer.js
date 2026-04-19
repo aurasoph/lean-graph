@@ -6,6 +6,7 @@ class SQLiteDependencyExplorer {
         this.currentGraph = 'structures';
         this.currentMode = 'search';
         this.traversalDepth = 1;
+        this.expansionDirection = 'all'; // 'all' | 'parents' | 'children'
         this.db = null;
         this.visibleNodes = new Set();
         this.visibleEdges = new Set();
@@ -129,13 +130,13 @@ class SQLiteDependencyExplorer {
         const suggestions = d3.select('.suggestions');
         
         searchInput.on('input', () => {
-            const query = searchInput.node().value.toLowerCase();
+            const query = searchInput.node().value;
             if (query.length < 2) {
                 suggestions.style('display', 'none');
                 return;
             }
-            
-            this.showSuggestions(query);
+            clearTimeout(this._searchTimer);
+            this._searchTimer = setTimeout(() => this.showSuggestions(query), 150);
         });
         
         searchInput.on('keydown', (event) => {
@@ -152,6 +153,14 @@ class SQLiteDependencyExplorer {
             const action = event.target.dataset.action;
             this.handleAction(action);
         });
+
+        // Direction toggle
+        d3.selectAll('.dir-btn').on('click', (event) => {
+            const dir = event.target.dataset.dir;
+            this.expansionDirection = dir;
+            d3.selectAll('.dir-btn').classed('active', false);
+            d3.select(event.target).classed('active', true);
+        });
         
         // Click outside to close suggestions
         d3.select('body').on('click', (event) => {
@@ -161,25 +170,34 @@ class SQLiteDependencyExplorer {
         });
     }
     
+    detectSchema() {
+        // unified.db: edges(src, dst, kind) + nodes(name, decl_type, module)
+        // standard dbs: nodes(id, label, full_name) + edges(source, target)
+        // Distinguish by the 'kind' column on edges, not by table presence.
+        const edgeCols = this.queryDB("PRAGMA table_info(edges)").map(r => r.name);
+        this.schema = edgeCols.includes('kind') ? 'unified' : 'standard';
+    }
+
+    // Schema-aware edge column accessors
+    get colSrc() { return this.schema === 'unified' ? 'src' : 'source'; }
+    get colDst() { return this.schema === 'unified' ? 'dst' : 'target'; }
+
     async loadGraph(graphType) {
         this.currentGraph = graphType;
         this.container.select('.loading').style('display', 'flex');
 
-        // Graphs too large to serve online — direct users to run locally
-        const LOCAL_ONLY = {
-            'type-deps':  'type-deps',
-            'proof-deps': 'proof-deps',
-        };
-        if (LOCAL_ONLY[graphType]) {
-            const mode = LOCAL_ONLY[graphType];
+        // Graphs too large to serve online — show message unless running locally
+        const LOCAL_ONLY = new Set(['unified']);
+        const isLocal = ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname);
+        if (LOCAL_ONLY.has(graphType) && !isLocal) {
             this.container.select('.loading').html(`
                 <div style="text-align:left; max-width:560px; line-height:1.6;">
                     <strong>This graph is too large to serve online.</strong><br><br>
-                    Run it locally from your <a href="https://github.com/leanprover-community/mathlib4" target="_blank">mathlib4</a> checkout:
-                    <pre style="background:#f4f4f4; padding:10px; border-radius:4px; margin-top:8px; font-size:13px; overflow-x:auto;">cd /path/to/mathlib4
-lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
-                    Then convert <code>output.dot</code> to a SQLite database and load it here via the local dev server.
-                    See the <a href="https://github.com/aurasoph/lean-graph" target="_blank">README</a> for setup instructions.
+                    Clone the repo and run the local server — the database is included via Git LFS:
+                    <pre style="background:#f4f4f4; padding:10px; border-radius:4px; margin-top:8px; font-size:13px; overflow-x:auto;">git lfs install
+git clone https://github.com/aurasoph/lean-graph
+python3 -m http.server 8000 --directory lean-graph/docs/</pre>
+                    See the <a href="https://github.com/aurasoph/lean-graph" target="_blank">README</a> for full setup instructions.
                 </div>
             `);
             return;
@@ -188,10 +206,7 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
         try {
             // Load database
             this.container.select('.loading').text(`Loading ${graphType} database...`);
-            const DB_URLS = {
-                'unified': 'https://github.com/aurasoph/lean-graph/releases/download/v1.0/unified.db'
-            };
-            const dbUrl = DB_URLS[graphType] ?? `data/${graphType}.db`;
+            const dbUrl = `data/${graphType}.db`;
             const dbResponse = await fetch(dbUrl);
             
             if (!dbResponse.ok) {
@@ -202,7 +217,8 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
             const dbArray = new Uint8Array(dbBuffer);
             
             this.db = new SQL.Database(dbArray);
-            
+            this.detectSchema();
+
             this.container.select('.loading').style('display', 'none');
             this.container.select('.instructions').style('display', 'block');
             
@@ -292,36 +308,38 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
     }
     
     getSuggestedNodes(query) {
-        const lowerQuery = query.toLowerCase();
-        
-        // Strategy 1: Exact prefix matches
-        let exactMatches = this.queryDB(
-            "SELECT id, label, 'exact' as match_type FROM nodes WHERE LOWER(id) LIKE ? LIMIT 3",
-            [`${lowerQuery}%`]
-        );
-        
-        // Strategy 2: Contains matches
-        let containsMatches = this.queryDB(
-            "SELECT id, label, 'contains' as match_type FROM nodes WHERE LOWER(id) LIKE ? AND LOWER(id) NOT LIKE ? LIMIT 4",
-            [`%${lowerQuery}%`, `${lowerQuery}%`]
-        );
-        
-        // Strategy 3: Word boundary matches
-        let wordMatches = this.queryDB(
-            "SELECT id, label, 'word' as match_type FROM nodes WHERE LOWER(id) LIKE ? OR LOWER(id) LIKE ? OR LOWER(id) LIKE ? LIMIT 3",
-            [`%${lowerQuery.charAt(0).toUpperCase() + lowerQuery.slice(1)}%`, 
-             `%.${lowerQuery}%`,
-             `%_${lowerQuery}%`]
-        );
-        
-        const allMatches = [...exactMatches, ...containsMatches, ...wordMatches];
-        const uniqueMatches = Array.from(
-            new Map(allMatches.map(item => [item.id, item])).values()
-        );
-        
-        const priorityOrder = { 'exact': 1, 'word': 2, 'contains': 3 };
-        return uniqueMatches
-            .sort((a, b) => (priorityOrder[a.match_type] || 4) - (priorityOrder[b.match_type] || 4))
+        // SQLite LIKE is case-insensitive for ASCII — no LOWER() needed (which breaks index use).
+        // For standard schema: search nodes table. For unified: search edge endpoints.
+        let prefixMatches, containsMatches;
+
+        if (this.schema === 'standard') {
+            prefixMatches = this.queryDB(
+                "SELECT id, label, 'prefix' as match_type FROM nodes WHERE id LIKE ? LIMIT 5",
+                [`${query}%`]
+            );
+            containsMatches = this.queryDB(
+                "SELECT id, label, 'contains' as match_type FROM nodes WHERE id LIKE ? AND id NOT LIKE ? LIMIT 5",
+                [`%${query}%`, `${query}%`]
+            );
+        } else {
+            // unified schema: search nodes table directly
+            prefixMatches = this.queryDB(
+                "SELECT name as id, name as label, 'prefix' as match_type FROM nodes WHERE name LIKE ? LIMIT 5",
+                [`${query}%`]
+            );
+            containsMatches = this.queryDB(
+                "SELECT name as id, name as label, 'contains' as match_type FROM nodes WHERE name LIKE ? AND name NOT LIKE ? LIMIT 5",
+                [`%${query}%`, `${query}%`]
+            );
+        }
+
+        const seen = new Map();
+        for (const m of [...prefixMatches, ...containsMatches]) {
+            if (!seen.has(m.id)) seen.set(m.id, m);
+        }
+        const priorityOrder = { 'prefix': 1, 'contains': 2 };
+        return Array.from(seen.values())
+            .sort((a, b) => (priorityOrder[a.match_type] || 3) - (priorityOrder[b.match_type] || 3))
             .slice(0, 8);
     }
     
@@ -339,10 +357,18 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
     
     searchAndAdd(query) {
         if (!this.db) return;
-        const matches = this.queryDB(
-            "SELECT id FROM nodes WHERE id = ? OR id LIKE ? LIMIT 1",
-            [query, `%.${query}`]
-        );
+        let matches;
+        if (this.schema === 'standard') {
+            matches = this.queryDB(
+                "SELECT id FROM nodes WHERE id = ? OR id LIKE ? LIMIT 1",
+                [query, `%.${query}`]
+            );
+        } else {
+            matches = this.queryDB(
+                "SELECT name as id FROM nodes WHERE name = ? OR name LIKE ? LIMIT 1",
+                [query, `%.${query}`]
+            );
+        }
         if (matches.length > 0) {
             this.addNode(matches[0].id);
         } else {
@@ -352,8 +378,13 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
     
     addNode(nodeId, expandRelatives = true) {
         if (!this.db) return;
-        const nodeExists = this.queryDB("SELECT id FROM nodes WHERE id = ?", [nodeId]);
-        if (nodeExists.length === 0) return;
+        if (this.schema === 'standard') {
+            const nodeExists = this.queryDB("SELECT id FROM nodes WHERE id = ?", [nodeId]);
+            if (nodeExists.length === 0) return;
+        } else {
+            const nodeExists = this.queryDB("SELECT name FROM nodes WHERE name = ?", [nodeId]);
+            if (nodeExists.length === 0) return;
+        }
         
         this.visibleNodes.add(nodeId);
         if (expandRelatives) {
@@ -367,16 +398,22 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
     }
     
     expandNeighbors(nodeId) {
-        const parents = this.queryDB("SELECT source FROM edges WHERE target = ?", [nodeId]);
-        parents.forEach(edge => {
-            this.visibleNodes.add(edge.source);
-            this.visibleEdges.add(`${edge.source}->${nodeId}`);
-        });
-        const children = this.queryDB("SELECT target FROM edges WHERE source = ?", [nodeId]);
-        children.forEach(edge => {
-            this.visibleNodes.add(edge.target);
-            this.visibleEdges.add(`${nodeId}->${edge.target}`);
-        });
+        const src = this.colSrc, dst = this.colDst;
+        const dir = this.expansionDirection;
+        if (dir !== 'children') {
+            const parents = this.queryDB(`SELECT ${src} as src FROM edges WHERE ${dst} = ?`, [nodeId]);
+            parents.forEach(edge => {
+                this.visibleNodes.add(edge.src);
+                this.visibleEdges.add(`${edge.src}->${nodeId}`);
+            });
+        }
+        if (dir !== 'parents') {
+            const children = this.queryDB(`SELECT ${dst} as dst FROM edges WHERE ${src} = ?`, [nodeId]);
+            children.forEach(edge => {
+                this.visibleNodes.add(edge.dst);
+                this.visibleEdges.add(`${nodeId}->${edge.dst}`);
+            });
+        }
     }
     
     setActiveNode(nodeId) {
@@ -389,31 +426,34 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
         this.nodeDistances.set(nodeId, 0);
         
         // Multi-depth expansion using BFS
+        const src = this.colSrc, dst = this.colDst;
+        const dir = this.expansionDirection;
         let currentLevelNodes = [nodeId];
         for (let depth = 1; depth <= this.traversalDepth; depth++) {
             let nextLevelNodes = [];
             for (const node of currentLevelNodes) {
-                // Get parents
-                const parents = this.queryDB("SELECT source FROM edges WHERE target = ?", [node]);
-                parents.forEach(edge => {
-                    if (!this.visibleNodes.has(edge.source)) {
-                        this.visibleNodes.add(edge.source);
-                        this.nodeDistances.set(edge.source, depth);
-                        nextLevelNodes.push(edge.source);
-                    }
-                    this.visibleEdges.add(`${edge.source}->${node}`);
-                });
-                
-                // Get children
-                const children = this.queryDB("SELECT target FROM edges WHERE source = ?", [node]);
-                children.forEach(edge => {
-                    if (!this.visibleNodes.has(edge.target)) {
-                        this.visibleNodes.add(edge.target);
-                        this.nodeDistances.set(edge.target, depth);
-                        nextLevelNodes.push(edge.target);
-                    }
-                    this.visibleEdges.add(`${node}->${edge.target}`);
-                });
+                if (dir !== 'children') {
+                    const parents = this.queryDB(`SELECT ${src} as src FROM edges WHERE ${dst} = ?`, [node]);
+                    parents.forEach(edge => {
+                        if (!this.visibleNodes.has(edge.src)) {
+                            this.visibleNodes.add(edge.src);
+                            this.nodeDistances.set(edge.src, depth);
+                            nextLevelNodes.push(edge.src);
+                        }
+                        this.visibleEdges.add(`${edge.src}->${node}`);
+                    });
+                }
+                if (dir !== 'parents') {
+                    const children = this.queryDB(`SELECT ${dst} as dst FROM edges WHERE ${src} = ?`, [node]);
+                    children.forEach(edge => {
+                        if (!this.visibleNodes.has(edge.dst)) {
+                            this.visibleNodes.add(edge.dst);
+                            this.nodeDistances.set(edge.dst, depth);
+                            nextLevelNodes.push(edge.dst);
+                        }
+                        this.visibleEdges.add(`${node}->${edge.dst}`);
+                    });
+                }
             }
             currentLevelNodes = nextLevelNodes;
             if (currentLevelNodes.length === 0) break;
@@ -448,20 +488,35 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
         
         const nodeIds = Array.from(this.visibleNodes);
         const placeholders = nodeIds.map(() => '?').join(',');
-        const nodes = this.queryDB(
-            `SELECT id, label, full_name FROM nodes WHERE id IN (${placeholders})`,
-            nodeIds
-        );
-        
-        // Add coordinates from simulation if they exist
+
+        let nodes;
+        if (this.schema === 'standard') {
+            nodes = this.queryDB(
+                `SELECT id, label, full_name FROM nodes WHERE id IN (${placeholders})`,
+                nodeIds
+            );
+        } else {
+            // unified: query nodes table for metadata; synthesize any not found
+            const rows = this.queryDB(
+                `SELECT name as id, name as full_name, decl_type, module FROM nodes WHERE name IN (${placeholders})`,
+                nodeIds
+            );
+            const found = new Set(rows.map(r => r.id));
+            const missing = nodeIds.filter(id => !found.has(id))
+                .map(id => ({ id, full_name: id, decl_type: 'other', module: '' }));
+            nodes = [...rows, ...missing];
+        }
+
+        // Restore simulation coordinates if they exist
         nodes.forEach(n => {
             const existing = this.simulation?.nodes().find(sn => sn.id === n.id);
             if (existing) { n.x = existing.x; n.y = existing.y; }
         });
 
+        const src = this.colSrc, dst = this.colDst;
         const edges = this.queryDB(
-            `SELECT source, target FROM edges 
-             WHERE source IN (${placeholders}) AND target IN (${placeholders})`,
+            `SELECT ${src} as source, ${dst} as target FROM edges
+             WHERE ${src} IN (${placeholders}) AND ${dst} IN (${placeholders})`,
             [...nodeIds, ...nodeIds]
         );
         
@@ -470,16 +525,18 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
         if (!this.simulation) {
             this.simulation = d3.forceSimulation()
                 .force('link', d3.forceLink().id(d => d.id).distance(100))
-                .force('charge', d3.forceManyBody().strength(-300))
+                .force('charge', d3.forceManyBody().strength(-200))
                 .force('center', d3.forceCenter(600, 400))
-                .force('collision', d3.forceCollide().radius(30));
+                .force('collision', d3.forceCollide().radius(30))
+                .alphaDecay(0.05)
+                .velocityDecay(0.5);
         }
-        
+
         const link = this.linkGroup.selectAll('line')
             .data(edges, d => `${d.source}->${d.target}`);
         link.exit().remove();
         const linkAll = link.enter().append('line').attr('class', 'link').merge(link);
-        
+
         const node = this.nodeGroup.selectAll('circle')
             .data(nodes, d => d.id);
         node.exit().remove();
@@ -491,7 +548,7 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
                 .on('drag', (event, d) => this.dragging(event, d))
                 .on('end', (event, d) => this.dragEnd(event, d)))
             .on('click', (event, d) => this.nodeClick(event, d));
-        
+
         const nodeAll = nodeEnter.merge(node)
             .classed('active', d => d.id === this.activeNode)
             .attr('fill', d => {
@@ -502,16 +559,27 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
                 if (dist === 3) return '#fd7e14';
                 return '#6c757d';
             });
-        
+
         const label = this.labelGroup.selectAll('text')
             .data(nodes, d => d.id);
         label.exit().remove();
         const labelAll = label.enter().append('text').attr('class', 'node-label').merge(label)
-            .text(d => d.label);
-        
+            .text(d => {
+                const name = d.full_name || d.id;
+                // For unified nodes use last component only (full names are too long to display)
+                return this.schema === 'unified' ? name.split('.').pop() : (d.label || name);
+            });
+
         this.simulation.nodes(nodes);
         this.simulation.force('link').links(edges);
-        this.simulation.alpha(0.3).restart();
+
+        // Only kick the simulation proportionally to how many nodes are new.
+        // If all nodes already had positions, skip the restart entirely.
+        const newCount = nodes.filter(n => n.x === undefined).length;
+        if (newCount > 0) {
+            const alpha = newCount <= 3 ? 0.1 : 0.3;
+            this.simulation.alpha(alpha).restart();
+        }
         
         this.simulation.on('tick', () => {
             linkAll.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
@@ -524,7 +592,10 @@ lake exe graph --mode ${mode} --to Mathlib output.dot</pre>
     nodeClick(event, d) {
         event.stopPropagation();
         if (this.currentMode === 'search') {
-            this.addNode(d.id, true);
+            // Always re-expand with current direction, whether node is new or already visible
+            this.visibleNodes.add(d.id);
+            this.expandNeighbors(d.id);
+            this.render();
         } else {
             this.setActiveNode(d.id);
         }

@@ -50,37 +50,35 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
   | none => none
   initSearchPath (← findSysroot)
 
+  let includeAll := args.hasFlag "include-aux"
+
   unsafe Lean.enableInitializersExecution
   let outFiles ← try unsafe withImportModules (to.map ({module := ·})) {} (trustLevel := 1024) fun env => do
     let toModule := ImportGraph.getModule to[0]!
-    
+
     -- Select graph mode based on --mode flag
     -- Track whether we're in constant-level mode (vs module-level)
     let (graphInit, isConstantLevel, isUnifiedMode) ← match args.flag? "mode" with
       | some modeFlag =>
         let mode := (modeFlag.as! String).toLower
-        let tier : Environment.FilterTier :=
-          if args.hasFlag "include-aux" then .exhaustive
-          else .standard
-        let includeInstances := args.hasFlag "include-instances"
-        
+
         match mode with
         | "unified" =>
           pure ({}, true, true)
         | "type-deps" | "blueprint" =>
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          let g ← Prod.fst <$> (CoreM.toIO (env.typeDepsGraph tier includeInstances) ctx state)
+          let g ← Prod.fst <$> (CoreM.toIO (env.typeDepsGraph includeAll) ctx state)
           pure (g, true, false)
         | "proof-deps" | "logic" =>
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          let g ← Prod.fst <$> (CoreM.toIO (env.proofDepsGraph tier includeInstances) ctx state)
+          let g ← Prod.fst <$> (CoreM.toIO (env.proofDepsGraph includeAll) ctx state)
           pure (g, true, false)
         | "hierarchy" | "triangles" | "structures" =>
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          let g ← Prod.fst <$> (CoreM.toIO (env.structuresGraph tier) ctx state)
+          let g ← Prod.fst <$> (CoreM.toIO (env.structuresGraph includeAll) ctx state)
           pure (g, true, false)
         | "imports" | "" =>
           pure (env.importGraph, false, false)
@@ -90,14 +88,18 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
     
     -- Handle unified mode separately since it has a different type
     if isUnifiedMode then
-      let tier : Environment.FilterTier :=
-        if args.hasFlag "include-aux" then .exhaustive
-        else .standard
-      let includeInstances := args.hasFlag "include-instances"
       let ctx := { options := {}, fileName := "<input>", fileMap := default }
       let state := { env }
-      let unifiedGraph ← Prod.fst <$> (CoreM.toIO (ImportGraph.Unified.unifiedGraph env tier includeInstances) ctx state)
-      
+      let unifiedGraph ← Prod.fst <$> (CoreM.toIO (ImportGraph.Unified.unifiedGraph env includeAll) ctx state)
+
+      -- Parse --edge-types flag
+      let allowedEdgeTypes : Option (Std.HashSet String) :=
+        match args.flag? "edge-types" with
+        | none => none
+        | some flag =>
+          let types := (flag.as! String).splitOn ","
+          some <| types.foldl (fun acc t => acc.insert t.trim) {}
+
       -- Write unified DOT file
       if extensions.contains "dot" then
         let dotOutputs := match args.variableArgsAs! String with
@@ -107,7 +109,7 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
               | none | some "dot" => true
               | _ => false)
         for output in dotOutputs do
-          ImportGraph.Unified.Export.writeUnifiedGraphToFile unifiedGraph output
+          ImportGraph.Unified.Export.writeUnifiedGraphToFile unifiedGraph output allowedEdgeTypes
       
       return {}  -- Return empty for GEXF (unified doesn't support GEXF yet)
     
@@ -280,9 +282,9 @@ def graph : Cmd := `[Cli|
    If you are working in a downstream project, use `lake exe graph --to MyProject`."
 
   FLAGS:
-    "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures', 'unified'."
-    "include-aux";             "Include auxiliary definitions (recursors, internal names, etc.). Default: exclude."
-    "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
+    "mode" : String;           "Graph mode: 'imports' (default), 'hierarchy'/'structures', 'unified'."
+    "edge-types" : String;     "For unified mode: comma-separated edge types to include. Valid: extends,field,sig,proof,def,docref. Default: all."
+    "include-aux";             "Include all declarations (exhaustive mode, bypasses doc-aligned filter)."
     "to" : Array ModuleName;   "Only show the upstream imports of the specified modules."
     "from" : Array ModuleName; "Only show the downstream dependencies of the specified modules."
     "exclude-meta";            "Exclude any files starting with `Mathlib.[Tactic|Lean|Util|Mathport]`."

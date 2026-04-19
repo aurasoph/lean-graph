@@ -30,6 +30,7 @@ ImportGraphTest/FileWithTransitiveImports
 ImportGraphTest/Used
 InstanceTest
 global_corpus.db
+docs/data/mathlib-doc-graph.db
 graph.pdf
 graph_variants/
 html-template/imports.gexf

@@ -42,7 +42,7 @@ private def getParentStructures (env : Environment) (structName : Name) : Array 
 /--
 Extract structure/class names from an expression.
 -/
-private def extractStructuresFromExpr (env : Environment) (e : Expr) : NameSet := 
+private def extractStructuresFromExpr (env : Environment) (e : Expr) : NameSet :=
   let rec walk (expr : Expr) (acc : NameSet) : NameSet :=
     match expr with
     | Expr.const n _ =>
@@ -78,51 +78,51 @@ private def getFieldDependencies (env : Environment) (structName : Name) : Array
 Build the structure/typeclass relationship graph, distinguishing between
 inheritance (extends) and composition (fields).
 -/
-public def analyzeStructures (env : Environment) (tier : FilterTier := .standard) : CoreM StructureAnalysis := do
+public def analyzeStructures (env : Environment) (includeAll : Bool := false) : CoreM StructureAnalysis := do
   let mut extendsEdges : NameMap (Array Name) := {}
   let mut fieldEdges : NameMap (Array Name) := {}
   let mut allNodes : NameSet := {}
-  
+
   for (name, _) in env.constants.toList do
-    if !(← shouldIncludeConstant env name tier true) then continue
-    
+    if !shouldIncludeConstant env name includeAll then continue
+
     if let some _sinfo := Lean.getStructureInfo? env name then
       allNodes := allNodes.insert name
-      
+
       -- 1. Inheritance edges
       let parents := getParentStructures env name
-      let filteredParents ← applyTransitiveClosure env parents tier true
+      let filteredParents ← applyTransitiveClosure env parents includeAll
       if filteredParents.size > 0 then
         extendsEdges := extendsEdges.insert name filteredParents
         for p in filteredParents do allNodes := allNodes.insert p
-      
+
       -- 2. Field dependencies
       let fields := getFieldDependencies env name
-      let filteredFields ← applyTransitiveClosure env fields tier true
+      let filteredFields ← applyTransitiveClosure env fields includeAll
       if filteredFields.size > 0 then
         fieldEdges := fieldEdges.insert name filteredFields
         for f in filteredFields do allNodes := allNodes.insert f
-  
+
   return { extendsEdges := extendsEdges, fieldEdges := fieldEdges, allNodes := allNodes }
 
 /-- Compatibility wrapper for the old structuresGraph API -/
-public def structuresGraph (env : Environment) (tier : FilterTier := .standard) : CoreM (NameMap (Array Name)) := do
-  let analysis ← analyzeStructures env tier
+public def structuresGraph (env : Environment) (includeAll : Bool := false) : CoreM (NameMap (Array Name)) := do
+  let analysis ← analyzeStructures env includeAll
   let mut combined : NameMap (Array Name) := {}
-  
+
   -- Initialize with all nodes found (including leaf nodes)
   for name in analysis.allNodes.toList do
     combined := combined.insert name #[]
-    
+
   -- Add extends edges
   for (name, parents) in analysis.extendsEdges.toList do
     combined := combined.insert name parents
-    
+
   -- Merge field edges
   for (name, fields) in analysis.fieldEdges.toList do
     let existing := combined.find? name |>.getD #[]
     combined := combined.insert name ((existing ++ fields).toList.eraseDups.toArray)
-    
+
   return combined
 
 end Lean.Environment
