@@ -29,5 +29,11 @@ name = "unused_transitive_imports"
 root = "MainUnusedTransitiveImports"
 supportInterpreter = true
 
+# `lake exe export_statements` exports declaration signatures to JSONL for LLM-based processing.
+[[lean_exe]]
+name = "export_statements"
+root = "MainExportStatements"
+supportInterpreter = true
+
 [[lean_lib]]
 name = "ImportGraphTest"

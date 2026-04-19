@@ -58,10 +58,10 @@ def smokeTesting (env : Environment) : CoreM Unit := do
   IO.println "Running ImportGraph smoke tests..."
   
   -- Test each graph mode can be built without crashing
-  let _ ← env.typeDepsGraph .standard false
+  let _ ← env.typeDepsGraph
   IO.println "✓ Type dependencies graph builds successfully"
-  
-  let _ ← env.proofDepsGraph .standard false  
+
+  let _ ← env.proofDepsGraph
   IO.println "✓ Proof dependencies graph builds successfully"
   
   let _ ← env.structuresGraph

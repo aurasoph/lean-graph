@@ -19,31 +19,27 @@ open Lean Meta
 
 This module constructs a dependency graph based on type signatures.
 For each constant, we extract all constants mentioned in its type signature.
-
-Provides tiered filtering via `FilterTier`.
 -/
 
 namespace Lean.Environment
 
-/-- 
+/--
 Extract type dependencies: all constants mentioned in the type signature.
 -/
 private def getTypeDependencies (_env : Environment) (_name : Name) (info : ConstantInfo) : Array Name :=
   info.type.getUsedConstants
 
 /-- Build type dependency graph based on constant type signatures. -/
-public def typeDepsGraph (env : Environment) 
-    (tier : FilterTier := .standard) (includeInstances : Bool := false) :
+public def typeDepsGraph (env : Environment) (includeAll : Bool := false) :
     CoreM (NameMap (Array Name)) := do
   let mut graph : NameMap (Array Name) := {}
-  
+
   for (name, info) in env.constants.toList do
-    let shouldInclude ← shouldIncludeConstant env name tier includeInstances
-    if shouldInclude then
+    if shouldIncludeConstant env name includeAll then
       let deps := getTypeDependencies env name info
-      let processedDeps ← applyTransitiveClosure env deps tier includeInstances
+      let processedDeps ← applyTransitiveClosure env deps includeAll
       graph := graph.insert name processedDeps
-  
+
   return graph
 
 end Lean.Environment

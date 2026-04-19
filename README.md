@@ -6,13 +6,30 @@ Dependency graphs for [Mathlib4](https://github.com/leanprover-community/mathlib
 
 **[Explore online →](https://aurasoph.github.io/lean-graph/)**
 
-| Graph | Online | Nodes | Edges |
-|-------|--------|-------|-------|
-| **Structures** | ✅ | ~3.2K | ~9.1K |
-| **Imports** | ✅ | ~10K | ~27K |
-| **Unified** | ✅ (loads from release) | ~321K | ~8.25M |
-| **Type-Deps** | ❌ local only | — | — |
-| **Proof-Deps** | ❌ local only | — | — |
+| Graph | Nodes | Edges | Online |
+|-------|-------|-------|--------|
+| **Structures** | ~3.2K | ~9.1K | ✅ |
+| **Imports** | ~10K | ~27K | ✅ |
+| **Unified** | ~321K | ~8M+ | ❌ local only |
+
+The unified graph is too large to serve from GitHub Pages (~1.3 GB). It is stored in Git LFS and available locally after cloning.
+
+## What is the Unified Graph?
+
+The unified graph combines every type of dependency in Mathlib into a single database. Each node is a declaration that has its own entry in the [Mathlib documentation](https://leanprover-community.github.io/mathlib4_docs/) — the graph and the docs are in 1:1 correspondence.
+
+Six edge types:
+
+| Kind | Meaning |
+|------|---------|
+| `extends` | Structure/class inheritance |
+| `field` | Composition via field/parameter |
+| `sig` | Type appearing in a signature |
+| `proof` | Theorem used in a proof body |
+| `def` | Declaration used in a definition body |
+| `docref` | Backtick reference (`` `Name ``) in a docstring |
+
+See [docs/FILTERING.md](docs/FILTERING.md) for the full filtering design.
 
 ## Generating Graphs Locally
 
@@ -41,25 +58,59 @@ lake exe graph --mode proof-deps --to Mathlib output.dot
 
 # Unified (all edge types combined)
 lake exe graph --mode unified --to Mathlib output.dot
+
+# Unified — specific edge types only
+lake exe graph --mode unified --edge-types proof,extends --to Mathlib output.dot
+
+# Exhaustive mode (bypasses doc-aligned filter, includes everything)
+lake exe graph --mode unified --include-aux --to Mathlib output.dot
 ```
 
 ## Running the Web Explorer Locally
 
-To explore large graphs (type-deps, proof-deps) in the browser:
+The database files are included in this repo via Git LFS. To run locally:
 
 ```bash
-# 1. Generate the DOT file (see above), e.g. type-deps.dot
-
-# 2. Convert to SQLite — place output at docs/data/<graph-type>.db
-#    The script in docs/convert_to_db.py reads from ../mathlib_graphs/ by default;
-#    edit the paths in that script or write a short conversion script. Schema:
-#      nodes(id TEXT, label TEXT, full_name TEXT)
-#      edges(source TEXT, target TEXT)
-
-# 3. Serve the docs/ directory
+git lfs install
+git clone https://github.com/aurasoph/lean-graph
+cd lean-graph
 python3 -m http.server 8000 --directory docs/
+# Open http://localhost:8000
+```
 
-# 4. Open http://localhost:8000
+The unified graph (too large for GitHub Pages) is fully available in the local server.
+
+### Regenerating databases
+
+If you've generated a fresh DOT file and want to rebuild the databases:
+
+**Structures, imports** — place DOT files in `mathlib_graphs/`, then:
+
+```bash
+python3 docs/convert_to_db.py
+# Reads from ../mathlib_graphs/*.dot, outputs to docs/data/<graph-name>.db
+```
+
+**Unified** — uses `convert_unified.py`, which reads the DOT file and its companion nodes CSV (written automatically alongside the DOT) and produces a DB with two tables:
+- `nodes(name TEXT, decl_type TEXT, module TEXT)` — declaration kind and defining module
+- `edges(src TEXT, dst TEXT, kind TEXT)` — edges with kind: `extends`, `field`, `sig`, `proof`, `def`, `docref`
+
+```bash
+# Generates unified_graph.dot + unified_graph_nodes.csv
+lake exe graph --mode unified --to Mathlib unified_graph.dot
+
+python3 docs/convert_unified.py unified_graph.dot unified_graph_nodes.csv docs/data/unified.db
+```
+
+**Exporting declaration signatures** — export all declaration signatures to JSONL for LLM-based processing:
+
+```bash
+# Run from inside your Mathlib checkout
+lake exe export_statements --to Mathlib --output statements.jsonl
+# Produces: {"name":"...","module":"...","decl_type":"...","signature":"...","docstring":"..."}
+
+# Exhaustive mode (includes everything, bypasses filter)
+lake exe export_statements --include-aux --to Mathlib --output statements.jsonl
 ```
 
 ## License
