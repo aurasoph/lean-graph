@@ -6,12 +6,12 @@ Interactive visualization tool for exploring Mathlib dependency graphs.
 
 Visit **[https://aurasoph.github.io/lean-graph/](https://aurasoph.github.io/lean-graph/)** to explore:
 
-- **Structures Graph**: 1,618 typeclass/structure inheritance relationships
-- **Imports Graph**: 10,284 module import dependencies
+- **Structures Graph**: typeclass/structure inheritance relationships
+- **Imports Graph**: module import dependencies
 
 ## Local Setup (Full Version)
 
-For the complete experience including large graphs (type-deps: 373K nodes, proof-deps: 387K nodes):
+For the complete experience including the unified graph (~381K nodes, ~16.1M edges):
 
 ### Prerequisites
 
@@ -118,4 +118,4 @@ lake exe graph --mode type-deps --include-lean mathlib_type_deps.dot
 lake exe graph --mode proof-deps --include-lean mathlib_proof_deps.dot
 ```
 
-These graphs represent the complete Lean + Std + Mathlib proof environment (~373K human-written constants) with auto-generated declarations filtered out.
+These graphs represent the complete Lean + Std + Mathlib proof environment (~381K human-written constants) with compiler-generated declarations filtered out. The unified graph combines all dependency types into a single database; see `AGENT_GUIDE.md` for the full schema and query reference.

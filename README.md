@@ -10,9 +10,9 @@ Dependency graphs for [Mathlib4](https://github.com/leanprover-community/mathlib
 |-------|-------|-------|--------|
 | **Structures** | ~3.2K | ~9.1K | ✅ |
 | **Imports** | ~10K | ~27K | ✅ |
-| **Unified** | ~321K | ~8M+ | ❌ local only |
+| **Unified** | ~381K | ~16.1M | ❌ local only |
 
-The unified graph is too large to serve from GitHub Pages (~1.3 GB). It is stored in Git LFS and available locally after cloning.
+The unified graph is too large to serve from GitHub Pages (~2.8 GB). It is stored in Git LFS and available locally after cloning.
 
 ## What is the Unified Graph?
 
@@ -20,14 +20,16 @@ The unified graph combines every type of dependency in Mathlib into a single dat
 
 Six edge types:
 
-| Kind | Meaning |
+| Kind (in DB) | Meaning |
 |------|---------|
 | `extends` | Structure/class inheritance |
-| `field` | Composition via field/parameter |
-| `sig` | Type appearing in a signature |
+| `field` | Composition via field/parameter (own and inherited fields) |
+| `signature` | Type appearing in a signature |
 | `proof` | Theorem used in a proof body |
 | `def` | Declaration used in a definition body |
 | `docref` | Backtick reference (`` `Name ``) in a docstring |
+
+Note: the DOT file uses `sig` as the edge label for signature edges; `convert_unified.py` maps this to `signature` when importing into the database.
 
 See [docs/FILTERING.md](docs/FILTERING.md) for the full filtering design.
 
@@ -105,9 +107,13 @@ python3 docs/convert_unified.py unified_graph.dot unified_graph_nodes.csv docs/d
 **Exporting declaration signatures** — export all declaration signatures to JSONL for LLM-based processing:
 
 ```bash
-# Run from inside your Mathlib checkout
+# Run from inside your Mathlib checkout (compiled binary, fast)
 lake exe export_statements --to Mathlib --output statements.jsonl
 # Produces: {"name":"...","module":"...","decl_type":"...","signature":"...","docstring":"..."}
+
+# Pretty mode: activates notation unexpanders (+ * ^ instead of instHAdd.hAdd etc.)
+# Requires the Lean interpreter — run with `lean --run`, not the compiled binary
+lake env lean --run /path/to/MainExportStatements.lean -- --to Mathlib --pretty --output statements_pretty.jsonl
 
 # Exhaustive mode (includes everything, bypasses filter)
 lake exe export_statements --include-aux --to Mathlib --output statements.jsonl

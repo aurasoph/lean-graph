@@ -9,7 +9,9 @@ public import Lean.Environment
 public import Lean.CoreM
 import Lean.Data.NameMap.Basic
 import Lean.Structure
+import Lean.Class
 import Lean.DocString
+import Lean.Meta.Instances
 import ImportGraph.Graph.Structures
 import ImportGraph.Graph.TypeDeps
 import ImportGraph.Graph.ProofDeps
@@ -84,36 +86,44 @@ def EdgeType.label : EdgeType → String
 public inductive DeclarationType where
   | structure : DeclarationType
   | class : DeclarationType
+  | instance : DeclarationType
   | theorem : DeclarationType
   | definition : DeclarationType
+  | opaque : DeclarationType
   | inductive : DeclarationType
+  | constructor : DeclarationType
   | axiom : DeclarationType
   | other : DeclarationType
   deriving Inhabited, BEq, Repr
 
 public def DeclarationType.shape : DeclarationType → String
   | .structure | .class => "ellipse"
+  | .instance | .definition | .opaque | .axiom => "box"
   | .theorem => "diamond"
-  | .definition => "box"
-  | .inductive => "triangle"
-  | .axiom => "box"
+  | .inductive | .constructor => "triangle"
   | .other => "ellipse"
 
 public def DeclarationType.fillColor : DeclarationType → String
   | .structure => "#b3d9ff"
   | .class => "#99ccff"
+  | .instance => "#ffd9b3"
   | .theorem => "#c1f0c1"
   | .definition => "#e2f9e2"
+  | .opaque => "#d9d9e8"
   | .inductive => "#d7b3ff"
+  | .constructor => "#edd9ff"
   | .axiom => "#ffb3b3"
   | .other => "#e0e0e0"
 
 public def DeclarationType.label : DeclarationType → String
   | .structure => "struct"
   | .class => "class"
+  | .instance => "inst"
   | .theorem => "thm"
   | .definition => "def"
+  | .opaque => "opaque"
   | .inductive => "ind"
+  | .constructor => "ctor"
   | .axiom => "axiom"
   | .other => "other"
 
@@ -135,15 +145,18 @@ def classifyDeclarationType (env : Environment) (name : Name) : DeclarationType 
   match env.find? name with
   | none => .other
   | some info =>
-    if let some _ := Lean.getStructureInfo? env name then
-      .structure
+    if Lean.isClass env name then .class
+    else if let some _ := Lean.getStructureInfo? env name then .structure
     else if Lean.isStructure env name then .structure
+    else if Lean.Meta.isInstanceCore env name then .instance
     else match info with
-      | .thmInfo _ => .theorem
-      | .defnInfo _ => .definition
-      | .axiomInfo _ => .axiom
-      | .inductInfo _ => .inductive
-      | _ => .other
+      | .thmInfo _               => .theorem
+      | .defnInfo _              => .definition
+      | .opaqueInfo _ | .quotInfo _ => .opaque
+      | .axiomInfo _             => .axiom
+      | .inductInfo _            => .inductive
+      | .ctorInfo _              => .constructor
+      | _                        => .other
 
 def nodesFromMap (graph : NameMap (Array Name)) : NameSet :=
   graph.foldl (fun acc name deps =>
@@ -185,6 +198,7 @@ private def extractDocRefNames (docstring : String) : Array String :=
       else
         go (c :: rest) acc
     | _ :: rest, acc => go rest acc
+  partial_fixpoint
   go docstring.toList #[]
 
 private def stringToName (s : String) : Name :=

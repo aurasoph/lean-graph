@@ -7,6 +7,7 @@ import Lean
 import Lean.Meta.Basic
 import Lean.PrettyPrinter
 import Lean.Util.PPExt
+import Lean.Class
 import Lean.DocString
 import Lean.Elab.Term
 import ImportGraph.Graph.FilterCommon
@@ -48,15 +49,18 @@ private def jsonEscape (s : String) : String :=
 
 /-- Classify a declaration kind as a short label. -/
 private def declTypeLabel (env : Environment) (name : Name) (info : ConstantInfo) : String :=
-  if let some _ := Lean.getStructureInfo? env name then "structure"
+  if Lean.isClass env name then "class"
+  else if let some _ := Lean.getStructureInfo? env name then "structure"
   else if Lean.isStructure env name then "structure"
+  else if Lean.Meta.isInstanceCore env name then "instance"
   else match info with
-    | .thmInfo _    => "theorem"
-    | .defnInfo _   => "definition"
-    | .axiomInfo _  => "axiom"
-    | .inductInfo _ => "inductive"
-    | .ctorInfo _   => "constructor"
-    | _             => "other"
+    | .thmInfo _               => "theorem"
+    | .defnInfo _              => "definition"
+    | .opaqueInfo _ | .quotInfo _ => "opaque"
+    | .axiomInfo _             => "axiom"
+    | .inductInfo _            => "inductive"
+    | .ctorInfo _              => "constructor"
+    | _                        => "other"
 
 /-- Get the root namespace component of a `Name` (e.g. `Mathlib.Algebra.Group` → `Mathlib`). -/
 private def nameRoot : Name → Name
