@@ -60,19 +60,22 @@ private def extractStructuresFromExpr (env : Environment) (e : Expr) : NameSet :
   walk e ∅
 
 /--
-Extract field/parameter dependencies from a structure's constructor type.
+Extract field/parameter dependencies from a structure's fields, including inherited ones.
+Uses `getStructureFieldsFlattened` (with `includeSubobjectFields := false`) so that
+parent subobject fields (`toFoo`) are skipped but all leaf fields — own and inherited —
+are visited. Each field's projection function type is walked to find structure references.
 -/
 private def getFieldDependencies (env : Environment) (structName : Name) : Array Name := Id.run do
-  let ctorName := structName.append `mk
-  match env.find? ctorName with
-  | none => return #[]
-  | some info =>
-    let fieldStructs := extractStructuresFromExpr env info.type
-    -- Remove the structure itself and its parents to get "pure" field dependencies
-    let parents := getParentStructures env structName |>.foldl (init := NameSet.empty) (·.insert ·)
-    let filtered := fieldStructs.erase structName
-    let filtered := parents.foldl (init := filtered) (·.erase ·)
-    return filtered.toArray
+  let fields := getStructureFieldsFlattened env structName (includeSubobjectFields := false)
+  let mut result : NameSet := {}
+  for fieldName in fields do
+    if let some finfo := getFieldInfo? env structName fieldName then
+      if let some projConstInfo := env.find? finfo.projFn then
+        let deps := extractStructuresFromExpr env projConstInfo.type
+        for dep in deps do
+          if dep != structName then
+            result := result.insert dep
+  return result.toArray
 
 /--
 Build the structure/typeclass relationship graph, distinguishing between

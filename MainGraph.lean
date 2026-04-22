@@ -98,7 +98,7 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
         | none => none
         | some flag =>
           let types := (flag.as! String).splitOn ","
-          some <| types.foldl (fun acc t => acc.insert t.trim) {}
+          some <| types.foldl (fun acc t => acc.insert t.trimAscii.toString) {}
 
       -- Write unified DOT file
       if extensions.contains "dot" then

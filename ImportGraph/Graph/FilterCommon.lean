@@ -24,16 +24,20 @@ Shared filtering utilities used across all graph modes.
 
 **Design goal**: a node in the graph corresponds to a declaration that has its own
 entry in the Mathlib/Lean documentation (doc-gen4 visible API). A declaration is
-included if and only if it would appear as a standalone entry in the docs:
+included if and only if it would appear as a standalone entry in the docs.
 
-- Has a source range (`isExplicitAPI`) — excludes compiler-generated declarations
-  (match blocks, equation lemmas, auto-generated constructors)
-- Is not an auxiliary recursor or noConfusion lemma
-- Is not a projection function — field accessors like `Mul.mul` are shown as
-  fields on the parent structure's page, not as standalone entries
+`shouldIncludeConstant` mirrors doc-gen4's `isBlackListed` predicate with one
+deliberate difference:
 
-Everything else — typeclass instances, tactic-layer declarations, opaque defs —
-is included, matching exactly what doc-gen4 documents.
+| Check | doc-gen4 | here |
+| --- | --- | --- |
+| no source range | `findDeclarationRanges? → none` | `isExplicitAPI` |
+| internal names | `isInternal` + `isInternalDetail` | `isInternalDetail` (subsumes `isInternal`) |
+| auxiliary recursors | `isAuxRecursor` | `isAuxRecursor` |
+| noConfusion lemmas | `isNoConfusion` | `isNoConfusion` |
+| raw kernel recursors | `isRec` (checks `.recursor` kind) | `env.find? matches .recInfo` (equivalent) |
+| match-compiler matchers | `isMatcher` (uses `getMatcherInfoCore?`) | `getMatcherInfoCore?` (identical) |
+| projection functions | included (render := false) | included |
 
 Pass `includeAll := true` to bypass all filtering (debug / exhaustive mode).
 -/
@@ -81,11 +85,17 @@ public def shouldIncludeConstant (env : Environment) (name : Name)
     (includeAll : Bool := false) : Bool :=
   if includeAll then true
   else
+    -- isInternalDetail subsumes isInternal: catches _-prefixed components plus
+    -- auto-generated eq_N/proof_N/match_N/omega_N suffixes.
     !name.isInternalDetail &&
     isExplicitAPI env name &&
     !isAuxRecursor env name &&
     !isNoConfusion env name &&
-    !isProjectionFn env name
+    -- Raw kernel recursors (.recInfo, e.g. List.rec, Nat.rec).
+    -- isAuxRecursor only catches tagged aux recursors; .recInfo is always excluded.
+    !(env.find? name matches some (.recInfo _)) &&
+    -- Match-compiler-generated matchers registered in the matcher extension.
+    !(Lean.Meta.getMatcherInfoCore? env name |>.isSome)
 
 /-- Like `shouldIncludeConstant` but additionally excludes inductive types,
 opaque defs, and quotient types from proof dependency graphs (they contribute
@@ -103,7 +113,6 @@ recover their mathematical content.
 
 When a dependency is excluded (e.g. a compiler-generated match block or
 equation lemma), we DFS into its body to find the real declarations inside.
-Projection functions are never expanded — their bodies are pure field accesses.
 
 Set `isProof := true` when processing proof/definition bodies to use the
 stricter `shouldIncludeConstantInProofDeps` gate.
@@ -141,8 +150,7 @@ public def applyFiltering (env : Environment) (deps : Array Name)
             resultSeen := resultSeen.insert parent
 
         -- Expand through compiler-generated nodes to find real content.
-        -- Do not expand through projection functions (body is just a field access).
-        if isProof && !isProjectionFn env dep then
+        if isProof then
           if let some info := env.find? dep then
             let subDeps := match info with
               | .thmInfo val  => val.value.getUsedConstants
