@@ -187,7 +187,7 @@ class SQLiteDependencyExplorer {
         this.container.select('.loading').style('display', 'flex');
 
         // Graphs too large to serve online — show message unless running locally
-        const LOCAL_ONLY = new Set(['unified']);
+        const LOCAL_ONLY = new Set(['unified', 'type-deps', 'proof-deps']);
         const isLocal = ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname);
         if (LOCAL_ONLY.has(graphType) && !isLocal) {
             this.container.select('.loading').html(`

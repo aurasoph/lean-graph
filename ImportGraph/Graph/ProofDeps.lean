@@ -54,7 +54,21 @@ public def proofDepsGraphStreaming (env : Environment)
 
     let deps : Array Name := match info with
       | .thmInfo val => val.value.getUsedConstants
-      | .defnInfo val => val.value.getUsedConstants
+      | .defnInfo val =>
+        -- `irreducible_def` (Mathlib.Tactic.IrreducibleDef) wraps the actual body
+        -- in an opaque Subtype, so val.value is just `Subtype.val wrapped` and
+        -- getUsedConstants returns only the opaque wrapper, not the real body.
+        -- The command also generates a `{name}_def` sibling theorem whose TYPE is
+        -- `name = actual_body_expr`. Walking that type recovers the hidden deps.
+        let direct := val.value.getUsedConstants
+        let irredDeps : Array Name :=
+          match name with
+          | .str pre s =>
+            match env.find? (.str pre (s ++ "_def")) with
+            | some (.thmInfo defLemma) => defLemma.type.getUsedConstants
+            | _ => #[]
+          | _ => #[]
+        (direct ++ irredDeps).toList.eraseDups.toArray
       | .axiomInfo _ => #[]
       | _ => #[]
 
@@ -95,9 +109,23 @@ public def proofDepsGraph (env : Environment) (includeAll : Bool := false) :
       continue
 
     match info with
-    | .thmInfo val | .defnInfo val =>
+    | .thmInfo val =>
       let deps := val.value.getUsedConstants
       let processedDeps ← applyTransitiveClosureForProofDeps env deps includeAll
+      graph := graph.insert name processedDeps
+    | .defnInfo val =>
+      -- See comment in proofDepsGraphStreaming: recover irreducible_def body deps
+      -- from the auto-generated `{name}_def` sibling theorem's type.
+      let direct := val.value.getUsedConstants
+      let irredDeps : Array Name :=
+        match name with
+        | .str pre s =>
+          match env.find? (.str pre (s ++ "_def")) with
+          | some (.thmInfo defLemma) => defLemma.type.getUsedConstants
+          | _ => #[]
+        | _ => #[]
+      let allDeps := (direct ++ irredDeps).toList.eraseDups.toArray
+      let processedDeps ← applyTransitiveClosureForProofDeps env allDeps includeAll
       graph := graph.insert name processedDeps
 
     | .axiomInfo _ =>
