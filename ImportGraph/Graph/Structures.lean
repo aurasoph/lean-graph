@@ -46,7 +46,14 @@ private def extractStructuresFromExpr (env : Environment) (e : Expr) : NameSet :
   let rec walk (expr : Expr) (acc : NameSet) : NameSet :=
     match expr with
     | Expr.const n _ =>
-      if Lean.getStructureInfo? env n |>.isSome then
+      -- Capture type-level documented constants in field expressions.
+      -- Includes structures, inductives, and defs (e.g. Set, Exists, Multiset).
+      -- Excludes theorems and constructors: these appear in proof-valued fields
+      -- and dependent type literals (e.g. Bool.true, Nat.succ) but are noise
+      -- for the purpose of understanding a structure's field types.
+      if shouldIncludeConstant env n &&
+         !(env.find? n matches some (.thmInfo _)) &&
+         !(env.find? n matches some (.ctorInfo _)) then
         acc.insert n
       else
         acc

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 <<<<<<< HEAD
 graph.pdf
@@ -33,12 +34,25 @@ graph.pdf
 --help
 --include-*
 --mode
+=======
+# Lean/Lake
+>>>>>>> 92e2720 (Fix irreducible_def body recovery and improve documentation)
 .lake/
 /build
 /lake-packages/*
 /lakefile.olean
-GRAPH_DESIGN_GUIDE.md
-GRAPH_VALIDATION_TESTS.md
+
+# Temporary/Analysis
+scratch/
+*.log
+*.csv
+--help
+--include-*
+--mode
+global_corpus.db
+corpus_comparison.txt
+
+# Test Artifacts
 ImportGraphTest/FileWithTransitiveImports
 ImportGraphTest/Used
 <<<<<<< HEAD
@@ -69,12 +83,16 @@ web-explorer/
 =======
 =======
 InstanceTest
-global_corpus.db
-docs/data/mathlib-doc-graph.db
 graph.pdf
 graph_variants/
-html-template/imports.gexf
 type-deps
+<<<<<<< HEAD
 >>>>>>> e03d90e (added unified graph and streamlined infrastructure)
 web-explorer/server.log
 >>>>>>> 7b2cba4 (i want to be a monk)
+=======
+
+# OS clutter
+**/.DS_Store
+docs/data/statements.jsonl
+>>>>>>> 92e2720 (Fix irreducible_def body recovery and improve documentation)
