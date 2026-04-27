@@ -6,8 +6,10 @@ Authors: ImportGraph Contributors
 module
 
 public import ImportGraph.Graph.Unified
+public import ImportGraph.Types
 open Lean
 open ImportGraph.Unified
+open ImportGraph.Types
 
 namespace ImportGraph.Unified.Export
 

@@ -7,6 +7,7 @@ module
 
 public import Lean.Environment
 public import Lean.CoreM
+public import ImportGraph.Types
 import Lean.Data.NameMap.Basic
 import Lean.Structure
 import Lean.Class
@@ -19,6 +20,7 @@ import ImportGraph.Graph.TransitiveClosure
 public import ImportGraph.Graph.FilterCommon
 
 open Lean
+open ImportGraph.Types
 
 /-!
 # Unified Dependency Graph
@@ -40,106 +42,6 @@ Edge Types:
 
 namespace ImportGraph.Unified
 
-/-- Edge type categorization -/
-public inductive EdgeType where
-  | extends : EdgeType
-  | field : EdgeType
-  | signatureType : EdgeType
-  | proofCall : EdgeType
-  | defCall : EdgeType
-  | docRef : EdgeType
-  deriving Inhabited, BEq, Hashable, Repr
-
-def EdgeType.color : EdgeType → String
-  | .extends => "blue"
-  | .field => "cyan"
-  | .signatureType => "orange"
-  | .proofCall => "green"
-  | .defCall => "lime"
-  | .docRef => "purple"
-
-def EdgeType.style : EdgeType → String
-  | .extends => "solid"
-  | .field => "solid"
-  | .signatureType => "dashed"
-  | .proofCall => "solid"
-  | .defCall => "solid"
-  | .docRef => "dotted"
-
-def EdgeType.penwidth : EdgeType → Nat
-  | .extends => 3
-  | .field => 2
-  | .signatureType => 1
-  | .proofCall => 3
-  | .defCall => 2
-  | .docRef => 1
-
-def EdgeType.label : EdgeType → String
-  | .extends => "extends"
-  | .field => "field"
-  | .signatureType => "sig"
-  | .proofCall => "proof"
-  | .defCall => "def"
-  | .docRef => "docref"
-
-/-- Declaration type classification for nodes -/
-public inductive DeclarationType where
-  | structure : DeclarationType
-  | class : DeclarationType
-  | instance : DeclarationType
-  | theorem : DeclarationType
-  | definition : DeclarationType
-  | opaque : DeclarationType
-  | inductive : DeclarationType
-  | constructor : DeclarationType
-  | axiom : DeclarationType
-  | other : DeclarationType
-  deriving Inhabited, BEq, Repr
-
-public def DeclarationType.shape : DeclarationType → String
-  | .structure | .class => "ellipse"
-  | .instance | .definition | .opaque | .axiom => "box"
-  | .theorem => "diamond"
-  | .inductive | .constructor => "triangle"
-  | .other => "ellipse"
-
-public def DeclarationType.fillColor : DeclarationType → String
-  | .structure => "#b3d9ff"
-  | .class => "#99ccff"
-  | .instance => "#ffd9b3"
-  | .theorem => "#c1f0c1"
-  | .definition => "#e2f9e2"
-  | .opaque => "#d9d9e8"
-  | .inductive => "#d7b3ff"
-  | .constructor => "#edd9ff"
-  | .axiom => "#ffb3b3"
-  | .other => "#e0e0e0"
-
-public def DeclarationType.label : DeclarationType → String
-  | .structure => "struct"
-  | .class => "class"
-  | .instance => "inst"
-  | .theorem => "thm"
-  | .definition => "def"
-  | .opaque => "opaque"
-  | .inductive => "ind"
-  | .constructor => "ctor"
-  | .axiom => "axiom"
-  | .other => "other"
-
-/-- Unified graph structure -/
-public structure UnifiedGraph where
-  nodes : NameSet
-  nodeTypes : NameMap DeclarationType
-  nodeModules : NameMap Name  -- name → defining Lean module
-  extendsEdges : NameMap (Array Name)
-  fieldEdges : NameMap (Array Name)
-  signatureEdges : NameMap (Array Name)
-  proofEdges : NameMap (Array Name)
-  defEdges : NameMap (Array Name)
-  docRefEdges : NameMap (Array Name)
-  deriving Inhabited
-
 /-- Classify a constant's declaration type -/
 def classifyDeclarationType (env : Environment) (name : Name) : DeclarationType :=
   match env.find? name with
@@ -152,11 +54,12 @@ def classifyDeclarationType (env : Environment) (name : Name) : DeclarationType 
     else match info with
       | .thmInfo _               => .theorem
       | .defnInfo _              => .definition
-      | .opaqueInfo _ | .quotInfo _ => .opaque
+      | .quotInfo _              => .quotient
+      | .opaqueInfo _            => .opaque
       | .axiomInfo _             => .axiom
       | .inductInfo _            => .inductive
       | .ctorInfo _              => .constructor
-      | _                        => .other
+      | .recInfo _               => .recursor
 
 def nodesFromMap (graph : NameMap (Array Name)) : NameSet :=
   graph.foldl (fun acc name deps =>

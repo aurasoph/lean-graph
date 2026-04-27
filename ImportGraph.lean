@@ -1,5 +1,6 @@
 module
 
+public import ImportGraph.Types
 public import ImportGraph.Export.DotFile
 public import ImportGraph.Export.Gexf
 public import ImportGraph.Graph.Filter
