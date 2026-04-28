@@ -96,3 +96,5 @@ web-explorer/server.log
 **/.DS_Store
 docs/data/statements.jsonl
 >>>>>>> 92e2720 (Fix irreducible_def body recovery and improve documentation)
+docs/data/*.db
+docs/data/*.json

@@ -229,10 +229,7 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
             | _ => false)
       for output in dotOutputs do
         IO.FS.withFile output .write fun handle =>
-          writeDotGraph handle graph (unused := unused) (markedPackage := markedPackage)
-            (directDeps := directDeps)
-            (withSorry := modulesWithSorry)
-            (to := NameSet.ofArray to) (from_ := NameSet.ofArray (from?.getD #[]))
+          writeDotGraph handle graph
 
     -- Create GEXF output (needed for HTML embedding, must be returned as string)
     let mut outFiles : Std.HashMap String String := {}

@@ -57,52 +57,50 @@ public def writeUnifiedGraphToFile
 
   -- Write nodes
   IO.eprintln "[Unified DOT] Writing nodes..."
-  for (name, declType) in g.nodeTypes.toList do
-    let shape := declType.shape
-    let fillColor := declType.fillColor
-    handle.putStrLn s!"  \"{name}\" [shape={shape}, style=filled, fillcolor=\"{fillColor}\"];"
+  for (name, _) in g.nodeTypes.toList do
+    handle.putStrLn s!"  \"{name}\";"
 
-  -- Write extends edges (blue)
+  -- Write extends edges
   if allow "extends" then
     IO.eprintln "[Unified DOT] Writing extends edges..."
     for (source, targets) in g.extendsEdges.toList do
       for target in targets do
-        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [color=\"blue\", penwidth=3, kind=extends];"
+        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [kind=extends];"
 
-  -- Write field edges (cyan)
+  -- Write field edges
   if allow "field" then
     IO.eprintln "[Unified DOT] Writing field edges..."
     for (source, targets) in g.fieldEdges.toList do
       for target in targets do
-        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [color=\"cyan\", penwidth=2, kind=field];"
+        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [kind=field];"
 
-  -- Write signature edges (orange)
+  -- Write signature edges
   if allow "sig" then
     IO.eprintln "[Unified DOT] Writing signature edges..."
     for (source, targets) in g.signatureEdges.toList do
       for target in targets do
-        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [color=\"orange\", penwidth=1, style=dashed, kind=sig];"
+        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [kind=sig];"
 
-  -- Write proof edges (green)
+  -- Write proof edges
   if allow "proof" then
     IO.eprintln "[Unified DOT] Writing proof edges..."
     for (source, targets) in g.proofEdges.toList do
       for target in targets do
-        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [color=\"green\", penwidth=3, kind=proof];"
+        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [kind=proof];"
 
-  -- Write def edges (lime)
+  -- Write def edges
   if allow "def" then
     IO.eprintln "[Unified DOT] Writing def edges..."
     for (source, targets) in g.defEdges.toList do
       for target in targets do
-        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [color=\"#32CD32\", penwidth=2, kind=def];"
+        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [kind=def];"
 
-  -- Write docref edges (purple, dotted)
+  -- Write docref edges
   if allow "docref" then
     IO.eprintln "[Unified DOT] Writing docref edges..."
     for (source, targets) in g.docRefEdges.toList do
       for target in targets do
-        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [color=\"purple\", penwidth=1, style=dotted, kind=docref];"
+        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [kind=docref];"
 
   -- Write footer
   handle.putStrLn "}"
