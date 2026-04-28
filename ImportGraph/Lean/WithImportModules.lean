@@ -9,6 +9,14 @@ public import Lean.CoreM
 
 open Lean
 
+/-!
+# CoreM Environment Loading
+
+Utilities for loading Lean modules into a CoreM environment.
+
+Simplifies the setup of CoreM computation with specific module imports loaded.
+-/
+
 public def Core.withImportModules (modules : Array Name) {α} (f : CoreM α) : IO α := do
   initSearchPath (← findSysroot)
   unsafe Lean.withImportModules (modules.map (fun m => {module := m})) {} (trustLevel := 1024)

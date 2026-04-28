@@ -1,5 +1,11 @@
 module
 
+/-!
+# FromSource (Deprecated)
+
+This module is deprecated. Use `ImportGraph.Imports.FromSource` instead.
+-/
+
 public import ImportGraph.Imports.FromSource
 import Lean
 

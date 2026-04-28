@@ -10,6 +10,14 @@ public import Lean.Data.NameMap.Basic
 public import Lean.Environment
 import ImportGraph.Lean.Environment
 
+/-!
+# Required Modules Analysis
+
+Identifies which modules are required for each declaration's dependencies.
+
+Computes the minimal set of module imports needed to support a declaration.
+-/
+
 public section
 
 namespace Lean

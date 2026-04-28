@@ -9,6 +9,15 @@ public meta import Lean.Elab.Command
 public meta import Lean.Widget.UserWidget
 public meta import ImportGraph.Imports.Redundant
 
+/-!
+# Redundant Imports Detection
+
+IDE tactic to identify and report unnecessary imports.
+
+Computes which imports in the current file can be removed because their
+dependencies are already transitively imported.
+-/
+
 public meta section
 
 open Lean

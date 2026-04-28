@@ -1,5 +1,11 @@
 module
 
+/-!
+# Meta (Deprecated)
+
+This module is deprecated. Use `import ImportGraph.Tools` instead.
+-/
+
 public meta import ImportGraph.Tools
 import Lean
 

@@ -7,6 +7,15 @@ module
 
 public import Lean.Environment
 
+/-!
+# Environment Utilities
+
+Helper functions for querying the Lean environment.
+
+Provides utilities to determine which module a declaration belongs to and
+other environment-level queries needed for analysis.
+-/
+
 namespace Lean
 
 /-- Return the name of the module in which a declaration was defined. -/

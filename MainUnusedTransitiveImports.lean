@@ -1,5 +1,16 @@
 module
 
+/-!
+# Unused Transitive Imports CLI
+
+Command-line tool for analyzing unused transitive imports.
+
+Usage: `lake exe unused_transitive_imports m1 m2 ...`
+
+For each module, identifies which other modules are transitively imported
+but not actually used by any declarations.
+-/
+
 public meta import ImportGraph.Lean.WithImportModules
 public meta import ImportGraph.Imports.Unused
 

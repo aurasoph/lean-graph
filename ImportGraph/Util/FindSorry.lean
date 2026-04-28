@@ -13,6 +13,14 @@ namespace ImportGraph
 
 open Lean
 
+/-!
+# Sorry Detection
+
+Identifies declarations that contain incomplete proofs (sorry).
+
+Useful for tracking proof obligations and incomplete work in a project.
+-/
+
 /--
 Array of all constant names which contain a `sorry`.
 -/

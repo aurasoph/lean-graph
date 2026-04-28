@@ -11,6 +11,15 @@ public meta import ImportGraph.Imports.RequiredModules
 public meta import ImportGraph.Imports.ImportGraph
 public meta import ImportGraph.Graph.TransitiveClosure
 
+/-!
+# Find Home
+
+IDE utility to locate optimal positions for declarations in the import hierarchy.
+
+Suggests the highest-level module where a declaration could be defined
+while minimizing required imports.
+-/
+
 public meta section
 
 open Lean

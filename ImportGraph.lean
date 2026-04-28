@@ -24,3 +24,22 @@ public meta import ImportGraph.Tools.MinImports
 public meta import ImportGraph.Tools.RedundantImports
 public import ImportGraph.Util.CurrentModule
 public import ImportGraph.Util.FindSorry
+
+/-!
+# ImportGraph
+
+Tools for analyzing and visualizing Lean 4 code dependency graphs.
+
+Combines multiple dependency types into unified graphs suitable for:
+- Machine learning on proof patterns
+- Dependency visualization and analysis
+- Module-level and declaration-level dependency studies
+
+## Core Modules
+
+- **Types**: Centralized type definitions (EdgeType, DeclarationType, UnifiedGraph)
+- **Graph**: Multiple graph analysis modes (unified, structures, types, proofs)
+- **Export**: Output formats (DOT, GEXF, CSV, JSONL)
+- **Imports**: Import dependency analysis
+- **Tools**: CLI utilities and metadata extraction
+-/

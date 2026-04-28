@@ -1,5 +1,11 @@
 module
 
+/-!
+# RequiredModules (Deprecated)
+
+This module is deprecated. Use `import ImportGraph.Imports.RequiredModules` instead.
+-/
+
 public import ImportGraph.Imports.RequiredModules
 import Lean
 

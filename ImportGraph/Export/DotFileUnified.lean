@@ -11,6 +11,15 @@ open Lean
 open ImportGraph.Unified
 open ImportGraph.Types
 
+/-!
+# Unified Graph DOT Export
+
+Export unified dependency graphs to DOT format with node metadata in CSV.
+
+Combines DOT visualization with metadata (declaration type, module) in a
+companion CSV file for analysis and visualization tools.
+-/
+
 namespace ImportGraph.Unified.Export
 
 /-- Write companion nodes CSV: name,decl_type,module -/

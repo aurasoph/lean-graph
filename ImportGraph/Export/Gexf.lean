@@ -11,6 +11,15 @@ import Lean.Meta.Match.MatcherInfo
 
 open Lean
 
+/-!
+# GEXF Format Export
+
+Export dependency graphs to GEXF (Graph Exchange XML Format).
+
+GEXF is a standardized format for network visualization tools like Gephi,
+enabling interactive exploration of large dependency networks.
+-/
+
 namespace ImportGraph
 
 open Elab Meta in

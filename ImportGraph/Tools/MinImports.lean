@@ -10,6 +10,15 @@ public meta import Lean.Widget.UserWidget
 public meta import ImportGraph.Imports.RequiredModules
 public meta import ImportGraph.Imports.Redundant
 
+/-!
+# Minimal Imports Computation
+
+Calculates the minimal set of module imports needed for a file.
+
+Removes redundant imports and suggests only the direct modules required
+for all declarations used in the current file.
+-/
+
 public meta section
 
 open Lean

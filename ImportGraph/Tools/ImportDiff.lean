@@ -9,6 +9,15 @@ public meta import Lean.Elab.Command
 public meta import Lean.Widget.UserWidget
 public meta import ImportGraph.Imports.ImportGraph
 
+/-!
+# Import Diff
+
+IDE tactic to compute new transitive imports when modules are added.
+
+Analyzes the difference in transitive closure when specific modules are
+added to or removed from a file's imports.
+-/
+
 public meta section
 
 open Lean

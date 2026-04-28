@@ -12,6 +12,14 @@ import ImportGraph.Imports.ImportGraph
 
 open Lean
 
+/-!
+# Redundant Import Detection
+
+Identifies imports that are transitively implied by other imports.
+
+Useful for import hygiene and minimizing unnecessary dependencies.
+-/
+
 namespace Lean.Environment
 
 /--

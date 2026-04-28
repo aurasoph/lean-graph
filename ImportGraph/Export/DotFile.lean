@@ -9,6 +9,15 @@ public import Lean.Data.NameMap.Basic
 
 open Lean
 
+/-!
+# DOT Format Export
+
+Utilities for exporting graphs in Graphviz DOT format.
+
+Provides streaming write functionality to handle large graphs (1M+ edges) efficiently
+without building the entire output in memory.
+-/
+
 /--
 Helper which only returns `true` if the `module` is provided and the name `n` lies
 inside it.

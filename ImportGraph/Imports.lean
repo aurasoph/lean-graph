@@ -1,5 +1,11 @@
 module
 
+/-!
+# Imports (Deprecated)
+
+This module is deprecated. Use `import ImportGraph` and select specific submodules instead.
+-/
+
 public import ImportGraph.Export.DotFile
 public import ImportGraph.Export.Gexf
 public import ImportGraph.Graph.Filter

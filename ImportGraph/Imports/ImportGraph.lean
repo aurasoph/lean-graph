@@ -8,6 +8,15 @@ module
 public import Lean.Environment
 public import Lean.Data.NameMap.Basic
 
+/-!
+# Import Graph Analysis
+
+Core utilities for analyzing module import relationships.
+
+Provides functions to extract import structure from the Lean environment,
+forming the basis for module-level dependency analysis.
+-/
+
 namespace Lean.Environment
 
 /--

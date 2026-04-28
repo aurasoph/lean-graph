@@ -9,6 +9,14 @@ import Lake.Load.Manifest
 
 open Lean (Name)
 
+/-!
+# Current Module Detection
+
+Utilities for determining the current project's main module.
+
+Reads Lake manifest to identify which module is being analyzed.
+-/
+
 namespace ImportGraph
 
 /-- Read the name of the main module from the `lake-manifest`. -/
