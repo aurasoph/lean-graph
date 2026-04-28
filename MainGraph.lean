@@ -5,20 +5,11 @@ import ImportGraph.Export.DotFile
 import ImportGraph.Export.Gexf
 import ImportGraph.Export.DotFileUnified
 import ImportGraph.Graph.Filter
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-import ImportGraph.Graph.TypeDeps
-import ImportGraph.Graph.ProofDeps
-import ImportGraph.Graph.Structures
->>>>>>> 43b41dd (renamed to make graph about structures more clear)
-=======
 import ImportGraph.Graph.TransitiveClosure
 import ImportGraph.Graph.TypeDeps
 import ImportGraph.Graph.ProofDeps
 import ImportGraph.Graph.Structures
 import ImportGraph.Graph.Unified
->>>>>>> e03d90e (added unified graph and streamlined infrastructure)
 import ImportGraph.Imports.ImportGraph
 import ImportGraph.Imports.RequiredModules
 import ImportGraph.Lean.Name
@@ -64,20 +55,11 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
   unsafe Lean.enableInitializersExecution
   let outFiles ← try unsafe withImportModules (to.map ({module := ·})) {} (trustLevel := 1024) fun env => do
     let toModule := ImportGraph.getModule to[0]!
-<<<<<<< HEAD
-<<<<<<< HEAD
-    let mut graph := env.importGraph
-=======
-    
-=======
 
->>>>>>> 5731572 (Replaces the three-tier filter with a single doc-aligned filter)
     -- Select graph mode based on --mode flag
-    -- Track whether we're in constant-level mode (vs module-level)
     let (graphInit, isConstantLevel, isUnifiedMode) ← match args.flag? "mode" with
       | some modeFlag =>
         let mode := (modeFlag.as! String).toLower
-
         match mode with
         | "unified" =>
           pure ({}, true, true)
@@ -101,7 +83,7 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
         | other =>
           throw <| IO.userError s!"Unknown graph mode: '{other}'. Valid modes: imports, type-deps, proof-deps, hierarchy, structures, unified"
       | none => pure (env.importGraph, false, false)
-    
+
     -- Handle unified mode separately since it has a different type
     if isUnifiedMode then
       let ctx := { options := {}, fileName := "<input>", fileMap := default }
@@ -126,16 +108,15 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
               | _ => false)
         for output in dotOutputs do
           ImportGraph.Unified.Export.writeUnifiedGraphToFile unifiedGraph output allowedEdgeTypes
-      
+
       return {}  -- Return empty for GEXF (unified doesn't support GEXF yet)
-    
+
     let mut graph := graphInit
     let modulesWithSorry := if args.hasFlag "mark-sorry" then ImportGraph.allModulesWithSorry env else ∅
 
     if let Option.some f := from? then
       graph := graph.downstreamOf (NameSet.ofArray f)
-    
->>>>>>> 0cf53af (fixed ﻿Was filtering by constant name prefix instead of module)
+
     let unused ←
       match args.flag? "to" with
       | some _ =>
@@ -146,10 +127,6 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
         let used := used.foldl (init := init) (fun s _ t => s ∪ t)
         pure <| graph.foldl (fun acc n _ => if used.contains n then acc else acc.insert n) NameSet.empty
       | none => pure NameSet.empty
-    let modulesWithSorry := if args.hasFlag "mark-sorry" then ImportGraph.allModulesWithSorry env else ∅
-
-    if let Option.some f := from? then
-      graph := graph.downstreamOf (NameSet.ofArray f)
     let includeLean := args.hasFlag "include-lean"
     let includeStd := args.hasFlag "include-std" || includeLean
     let includeDeps := args.hasFlag "include-deps" || includeStd
@@ -300,29 +277,17 @@ def graph : Cmd := `[Cli|
    If you are working in a downstream project, use `lake exe graph --to MyProject`."
 
   FLAGS:
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
     "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures'."
     "include-aux";             "Include auxiliary definitions (recursors, internal names, etc.). Default: exclude."
     "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
->>>>>>> 43b41dd (renamed to make graph about structures more clear)
     "show-transitive";         "Show transitively redundant edges."
-=======
     "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures', 'unified'."
     "include-aux";             "Include auxiliary definitions (recursors, internal names, etc.). Default: exclude."
     "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
-<<<<<<< HEAD
     "mathematical";            "Filter out ubiquitous constants (Eq, rfl, Nat, etc.) to provide a cleaner mathematical map."
->>>>>>> e03d90e (added unified graph and streamlined infrastructure)
-=======
->>>>>>> 6c5b0d8 (improved filtering for unified graph)
-=======
     "mode" : String;           "Graph mode: 'imports' (default), 'hierarchy'/'structures', 'unified'."
     "edge-types" : String;     "For unified mode: comma-separated edge types to include. Valid: extends,field,sig,proof,def,docref. Default: all."
     "include-aux";             "Include all declarations (exhaustive mode, bypasses doc-aligned filter)."
->>>>>>> 5731572 (Replaces the three-tier filter with a single doc-aligned filter)
     "to" : Array ModuleName;   "Only show the upstream imports of the specified modules."
     "from" : Array ModuleName; "Only show the downstream dependencies of the specified modules."
     "exclude-meta";            "Exclude any files starting with `Mathlib.[Tactic|Lean|Util|Mathport]`."

@@ -1,3 +1,8 @@
+/-
+Test library. Contains test fixtures and regression tests.
+-/
+
+-- Test fixtures (small Lean files for testing import structure)
 import ImportGraphTest.AnotherFileWithTransitiveImports
 import ImportGraphTest.Dot
 import ImportGraphTest.FileWithTransitiveImports
@@ -8,3 +13,8 @@ import ImportGraphTest.Used
 import ImportGraphTest.ToTarget
 import ImportGraphTest.WithSorry.Def
 import ImportGraphTest.WithSorry.Thm
+
+-- Test suites
+import ImportGraphTest.RegressionTests
+import ImportGraphTest.UnifiedGraphTests
+import ImportGraphTest.FilteringTests

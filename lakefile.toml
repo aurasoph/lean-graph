@@ -4,7 +4,6 @@ license = "Apache-2.0"
 licenseFiles = ["LICENSE"]
 
 defaultTargets = ["ImportGraph", "graph"]
-testRunner = "ImportGraphTest"
 
 [[require]]
 name = "Cli"
@@ -33,6 +32,12 @@ supportInterpreter = true
 [[lean_exe]]
 name = "export_statements"
 root = "MainExportStatements"
+supportInterpreter = true
+
+# `lake exe test` runs the comprehensive test suite.
+[[lean_exe]]
+name = "test"
+root = "MainTest"
 supportInterpreter = true
 
 [[lean_lib]]

@@ -106,44 +106,9 @@ public def asDotGraph
     String := Id.run do
   let mut lines := #[s!"digraph \"{header}\" " ++ "{"]
   for (n, is) in graph do
-<<<<<<< HEAD
-    let shape := if from_.contains n then "invhouse" else if to.contains n then "house" else "ellipse"
-    if markedPackage.isSome ∧ directDeps.contains n then
-      -- note: `fillcolor` defaults to `color` if not specified
-      let fill := if withSorry.contains n then
-          "#ffd700"
-        else if unused.contains n then
-          "#e0e0e0"
-        else
-          "white"
-      lines := lines.push s!"  \"{n}\" [style=filled, fontcolor=\"#4b762d\", color=\"#71b144\", fillcolor=\"{fill}\", penwidth=2, shape={shape}];"
-    else if withSorry.contains n then
-      lines := lines.push s!"  \"{n}\" [style=filled, fillcolor=\"#ffd700\", shape={shape}];"
-    else if unused.contains n then
-      lines := lines.push s!"  \"{n}\" [style=filled, fillcolor=\"#e0e0e0\", shape={shape}];"
-    else if isInModule markedPackage n then
-      -- mark node
-      lines := lines.push s!"  \"{n}\" [style=filled, fillcolor=\"#96ec5b\", shape={shape}];"
-    else
-      lines := lines.push s!"  \"{n}\" [shape={shape}];"
+    lines := lines.push s!"  \"{n}\";"
     -- Then add edges
     for i in is do
-      if isInModule markedPackage n then
-        if isInModule markedPackage i then
-          -- draw the main project close together
-          lines := lines.push s!"  \"{i}\" -> \"{n}\" [weight=100];"
-        else
-          -- mark edges into the main project
-          lines := lines.push s!"  \"{i}\" -> \"{n}\" [penwidth=2, color=\"#71b144\"];"
-      else
-        lines := lines.push s!"  \"{i}\" -> \"{n}\";"
+      lines := lines.push s!"  \"{i}\" -> \"{n}\";"
   lines := lines.push "}"
   return "\n".intercalate lines.toList
-=======
-    result := result ++ s!"  \"{n}\";\n"
-    -- Then add edges
-    for i in is do
-      result := result ++ s!"  \"{i}\" -> \"{n}\";\n"
-  result := result ++ "}"
-  return result
->>>>>>> ccf9d1a (Remove visualization attributes from DOT exports)
