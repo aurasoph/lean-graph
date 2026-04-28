@@ -1,7 +1,7 @@
 /-
-Copyright (c) 2026 ImportGraph Contributors. All rights reserved.
+Copyright (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: ImportGraph Contributors
+Authors: Evan Wang
 -/
 
 /-!
