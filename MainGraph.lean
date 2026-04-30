@@ -11,6 +11,7 @@ public import Cli.Basic
 import ImportGraph.Export.DotFile
 import ImportGraph.Export.Gexf
 import ImportGraph.Export.DotFileUnified
+import ImportGraph.Export.NdjsonUnified
 import ImportGraph.Graph.Filter
 import ImportGraph.Graph.TransitiveClosure
 import ImportGraph.Graph.TypeDeps
@@ -45,6 +46,7 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
        | none => acc.insert "dot"
        | some "gexf" => acc.insert "gexf"
        | some "html" => acc.insert "gexf"
+       | some "ndjson" => acc.insert "ndjson"
        -- currently all other formats are handled by passing the `.dot` file to
        -- graphviz
        | some _ => acc.insert "dot" ) {}
@@ -115,6 +117,17 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
               | _ => false)
         for output in dotOutputs do
           ImportGraph.Unified.Export.writeUnifiedGraphToFile unifiedGraph output allowedEdgeTypes
+
+      -- Write unified NDJSON file
+      if extensions.contains "ndjson" then
+        let ndjsonOutputs : Array String := match args.variableArgsAs! String with
+          | #[] => #[]
+          | outputs => outputs.filter (fun (o : String) =>
+              match (o : FilePath).extension with
+              | some "ndjson" => true
+              | _ => false)
+        for output in ndjsonOutputs do
+          ImportGraph.Unified.Export.writeUnifiedGraphToNdjson unifiedGraph output allowedEdgeTypes
 
       return {}  -- Return empty for GEXF (unified doesn't support GEXF yet)
 
@@ -284,17 +297,12 @@ def graph : Cmd := `[Cli|
    If you are working in a downstream project, use `lake exe graph --to MyProject`."
 
   FLAGS:
-    "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures'."
-    "include-aux";             "Include auxiliary definitions (recursors, internal names, etc.). Default: exclude."
+    "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures', 'unified'."
+    "include-aux";             "Include all declarations (exhaustive mode, bypasses doc-aligned filter)."
     "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
     "show-transitive";         "Show transitively redundant edges."
-    "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures', 'unified'."
-    "include-aux";             "Include auxiliary definitions (recursors, internal names, etc.). Default: exclude."
-    "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
     "mathematical";            "Filter out ubiquitous constants (Eq, rfl, Nat, etc.) to provide a cleaner mathematical map."
-    "mode" : String;           "Graph mode: 'imports' (default), 'hierarchy'/'structures', 'unified'."
     "edge-types" : String;     "For unified mode: comma-separated edge types to include. Valid: extends,field,sig,proof,def,docref. Default: all."
-    "include-aux";             "Include all declarations (exhaustive mode, bypasses doc-aligned filter)."
     "to" : Array ModuleName;   "Only show the upstream imports of the specified modules."
     "from" : Array ModuleName; "Only show the downstream dependencies of the specified modules."
     "exclude-meta";            "Exclude any files starting with `Mathlib.[Tactic|Lean|Util|Mathport]`."
@@ -309,8 +317,10 @@ def graph : Cmd := `[Cli|
     ...outputs : String;  "Filename(s) for the output. \
       If none are specified, generates `import_graph.dot`. \
       Automatically chooses the format based on the file extension. \
-      Currently supported formats are `.dot`, `.gexf`, `.html`, \
-      and if you have `graphviz` installed then any supported output format is allowed."
+      Currently supported formats are `.dot`, `.gexf`, `.ndjson`, `.html`, \
+      and if you have `graphviz` installed then any supported output format is allowed. \
+      For unified mode: `.ndjson` outputs newline-delimited JSON (streaming-friendly), \
+      `.dot` outputs graph visualization with companion `.csv` metadata."
 ]
 
 
