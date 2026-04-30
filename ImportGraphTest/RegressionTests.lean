@@ -108,18 +108,42 @@ def testFilteringAPIs : CoreM Unit := do
   IO.println "✓ Private/internal declaration detection works correctly"
 
 /--
+Demonstrate filtering behavior: compare filtered vs exhaustive mode.
+Shows the impact of including auto-generated and internal declarations.
+-/
+def demonstrateFiltering (env : Environment) : CoreM Unit := do
+  IO.println "📊 Filtering behavior demonstration:"
+
+  let filteredCount := env.constants.toList.filter (fun (name, _) =>
+    Lean.Environment.shouldIncludeConstant env name false) |>.length
+
+  let exhaustiveCount := env.constants.size
+  let ratio := if exhaustiveCount > 0 then (100 * filteredCount) / exhaustiveCount else 0
+
+  IO.println s!"  Filtered mode:   {filteredCount} declarations ({ratio}% of total)"
+  IO.println s!"  Exhaustive mode: {exhaustiveCount} declarations (100%)"
+  IO.println s"  Difference:      {exhaustiveCount - filteredCount} auto-generated/internal"
+  IO.println ""
+  IO.println "  Use --include-aux for exhaustive mode (all declarations)"
+  IO.println "  Default: filtered mode (human-written code only)"
+
+/--
 Run basic regression tests to verify key functionality.
 This catches the critical bugs identified in the maintainer review.
 -/
 def runRegressionTests (env : Environment) : CoreM Unit := do
   IO.println "🧪 Running ImportGraph regression tests..."
   IO.println ""
-  
+
+  -- Demonstrate filtering behavior
+  demonstrateFiltering env
+  IO.println ""
+
   -- Basic functionality tests
   smokeTesting env
   IO.println ""
-  
-  -- API correctness tests  
+
+  -- API correctness tests
   testFilteringAPIs
   IO.println ""
   

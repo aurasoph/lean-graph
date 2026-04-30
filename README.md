@@ -31,7 +31,48 @@ Six edge types:
 
 Note: the DOT file (and `--edge-types` flag) uses `sig` as the label for signature edges; `convert_unified.py` maps this to `signature` when importing into the database.
 
-See [docs/FILTERING.md](docs/FILTERING.md) for the full filtering design and [GRAPH_VALIDATION_TESTS.md](GRAPH_VALIDATION_TESTS.md) for specific test cases that define the graph's quality.
+See [FILTERING.md](FILTERING.md) for the filtering design, including:
+- **Default mode**: 46k declarations (human-written code only)
+- **Exhaustive mode** (`--include-aux`): 308k declarations (everything)
+- When to use each mode and examples
+
+See also [GRAPH_VALIDATION_TESTS.md](GRAPH_VALIDATION_TESTS.md) for specific test cases that define the graph's quality.
+
+## Output Formats
+
+The graph tool supports multiple output formats:
+
+| Format | Use Case | Example |
+|--------|----------|---------|
+| **DOT** (.dot) | Graph visualization with Graphviz | `lake exe graph output.dot` |
+| **CSV** (_nodes.csv, _edges.csv) | Spreadsheet analysis | Companion to .dot files |
+| **NDJSON** (.ndjson) | Streaming, Python/data science | `lake exe graph output.ndjson` |
+| **Module-level CSV/DOT** | Architecture analysis | `--aggregate module output.csv` |
+
+### Example: Python Analysis with NDJSON
+
+```bash
+# Generate NDJSON format (streaming-friendly for large graphs)
+lake exe graph --mode unified --to Mathlib output.ndjson
+
+# Then analyze in Python
+python3 << 'EOF'
+import json
+with open('output.ndjson') as f:
+    for line in f:
+        node = json.loads(line)
+        print(f"{node['name']}: {len(node['edges'])} deps")
+EOF
+```
+
+### Example: Module-Level Architecture
+
+```bash
+# See which files depend on which (7.5k modules instead of 46k declarations)
+lake exe graph --mode unified --to Mathlib --aggregate module arch.csv
+
+# Outputs: arch_nodes.csv (modules) and arch_edges.csv (inter-module dependencies with weights)
+```
 
 ## Project Structure
 

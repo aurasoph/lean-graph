@@ -323,7 +323,7 @@ def graph : Cmd := `[Cli|
 
   FLAGS:
     "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures', 'unified'."
-    "include-aux";             "Include all declarations (exhaustive mode, bypasses doc-aligned filter)."
+    "include-aux";             "EXHAUSTIVE MODE: Include all 308k declarations (auto-generated, private, internal, etc.). Default (without flag): only 46k human-written declarations. Use for: full refactoring scope, compliance audits, or understanding Lean's internals."
     "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
     "show-transitive";         "Show transitively redundant edges."
     "mathematical";            "Filter out ubiquitous constants (Eq, rfl, Nat, etc.) to provide a cleaner mathematical map."
