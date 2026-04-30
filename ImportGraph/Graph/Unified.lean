@@ -68,6 +68,96 @@ def nodesFromMap (graph : NameMap (Array Name)) : NameSet :=
     deps.foldl (fun acc dep => acc.insert dep) acc
   ) ∅
 
+/-- Pre-computed symbol context for efficient phase separation -/
+private structure SymbolContext where
+  includedSymbols  : NameSet
+  proofDepsSymbols : NameSet
+  declTypes        : NameMap DeclarationType
+  declModules      : NameMap Name
+
+/-- Single-pass symbol discovery: classify all symbols and compute module mappings -/
+private def discoverSymbols (env : Environment) (includeAll : Bool) : SymbolContext :=
+  let (includedSymbols, proofDepsSymbols, declTypes, declModules) :=
+    env.constants.toList.foldl (fun (incl, proof, types, mods) (name, _) =>
+      let incl' :=
+        if Lean.Environment.shouldIncludeConstant env name includeAll then
+          incl.insert name
+        else
+          incl
+      let types' :=
+        if incl'.contains name then
+          types.insert name (classifyDeclarationType env name)
+        else
+          types
+      let modName : Name := match env.getModuleIdxFor? name with
+        | some idx => env.header.moduleNames[idx.toNat]!
+        | none => .anonymous
+      let mods' :=
+        if incl'.contains name then
+          mods.insert name modName
+        else
+          mods
+      let proof' :=
+        if Lean.Environment.shouldIncludeConstantInProofDeps env name includeAll then
+          proof.insert name
+        else
+          proof
+      (incl', proof', types', mods')
+    ) (∅, ∅, {}, {})
+  {
+    includedSymbols
+    proofDepsSymbols
+    declTypes
+    declModules
+  }
+
+/-- Build proof and definition edges with inline categorization using pre-computed context -/
+private def buildProofAndDefEdges (env : Environment) (ctx : SymbolContext) (includeAll : Bool) :
+    CoreM (NameMap (Array Name) × NameMap (Array Name)) := do
+  let mut proofEdges : NameMap (Array Name) := {}
+  let mut defEdges : NameMap (Array Name) := {}
+  let mut processedCount := 0
+
+  IO.eprintln "[Unified] Analyzing proof and definition implementations..."
+
+  for (name, info) in env.constants.toList do
+    processedCount := processedCount + 1
+
+    if processedCount % 5000 == 0 then
+      IO.eprintln s!"[Unified] Processing constant {processedCount}: {name}"
+
+    if ctx.proofDepsSymbols.contains name then
+      let shouldProcess : Bool := match info with
+        | .thmInfo _ | .defnInfo _ | .axiomInfo _ => true
+        | _ => false
+
+      if shouldProcess then
+        let deps : Array Name := match info with
+          | .thmInfo val => val.value.getUsedConstants
+          | .defnInfo val =>
+            let direct := val.value.getUsedConstants
+            let irredDeps : Array Name :=
+              match name with
+              | .str pre s =>
+                match env.find? (.str pre (s ++ "_def")) with
+                | some (.thmInfo defLemma) => defLemma.type.getUsedConstants
+                | _ => #[]
+              | _ => #[]
+            (direct ++ irredDeps).toList.eraseDups.toArray
+          | .axiomInfo _ => #[]
+          | _ => #[]
+
+        let processedDeps ← Lean.Environment.applyTransitiveClosureForProofDeps env deps includeAll
+
+        -- Route to proofEdges or defEdges based on source node type
+        let sourceType := ctx.declTypes.find? name |>.getD .other
+        if sourceType == .theorem then
+          proofEdges := proofEdges.insert name processedDeps
+        else
+          defEdges := defEdges.insert name processedDeps
+
+  return (proofEdges, defEdges)
+
 /-!
 ## Docstring backtick reference extraction
 
@@ -110,21 +200,20 @@ private def stringToName (s : String) : Name :=
   else s.splitOn "." |>.foldl (fun acc part => .str acc part) .anonymous
 
 /--
-Build docref edges: for each declaration's docstring, extract all `` `Name ``
-backtick references that resolve to known, included declarations.
+Build docref edges using pre-computed context: extract all `` `Name `` backtick
+references from docstrings that resolve to known, included declarations.
 -/
-private def buildDocRefEdges (env : Environment) (includeAll : Bool) :
+private def buildDocRefEdgesWithCtx (env : Environment) (ctx : SymbolContext) :
     CoreM (NameMap (Array Name)) := do
   let mut docRefEdges : NameMap (Array Name) := {}
   for (name, _) in env.constants.toList do
-    if !Lean.Environment.shouldIncludeConstant env name includeAll then continue
+    if !ctx.includedSymbols.contains name then continue
     if let some docStr ← Lean.findDocString? env name then
       let refStrs := extractDocRefNames docStr
       let mut validRefs : Array Name := #[]
       for refStr in refStrs do
         let refName := stringToName refStr
-        if refName != .anonymous && env.contains refName &&
-           Lean.Environment.shouldIncludeConstant env refName includeAll &&
+        if refName != .anonymous && ctx.includedSymbols.contains refName &&
            refName != name && !validRefs.contains refName then
           validRefs := validRefs.push refName
       if !validRefs.isEmpty then
@@ -132,56 +221,54 @@ private def buildDocRefEdges (env : Environment) (includeAll : Bool) :
   return docRefEdges
 
 /--
-Build the unified dependency graph.
+Build the unified dependency graph with explicit phase separation.
+
+Phase 1: Symbol discovery (single pass)
+Phase 2: Edge computation (parallel builds)
+Phase 3: Node merging
+Phase 4: Type/module lookup from pre-computed context
 -/
 public def unifiedGraph (env : Environment) (includeAll : Bool := false) : CoreM UnifiedGraph := do
 
-  -- Step 1: Collect structures graph
+  -- Phase 1: Discover all included symbols, classify types, map modules
+  IO.eprintln "[Unified] Discovering symbols..."
+  let ctx := discoverSymbols env includeAll
+
+  -- Phase 2: Build all edge types
   IO.eprintln "[Unified] Analyzing structures..."
   let structures ← env.analyzeStructures includeAll
 
-  -- Step 2: Collect type signature graph
   IO.eprintln "[Unified] Analyzing type signatures..."
   let typeDepsGraph ← env.typeDepsGraph includeAll
 
-  -- Step 3: Collect proof dependencies graph
-  IO.eprintln "[Unified] Analyzing proof implementations..."
-  let proofDepsGraph ← env.proofDepsGraph includeAll
+  IO.eprintln "[Unified] Analyzing proof and definition implementations..."
+  let (proofEdges, defEdges) ← buildProofAndDefEdges env ctx includeAll
 
-  -- Step 4: Build docref edges from docstring backtick references
   IO.eprintln "[Unified] Extracting docstring references..."
-  let docRefEdges ← buildDocRefEdges env includeAll
+  let docRefEdges ← buildDocRefEdgesWithCtx env ctx
 
-  -- Step 5: Extract and merge node sets (including docref participants)
+  -- Phase 3: Merge all node sets
   IO.eprintln "[Unified] Merging nodes..."
   let mut allNodes := nodesFromMap structures.extendsEdges
   allNodes := (nodesFromMap structures.fieldEdges).foldl (·.insert ·) allNodes
   allNodes := (nodesFromMap typeDepsGraph).foldl (·.insert ·) allNodes
-  allNodes := (nodesFromMap proofDepsGraph).foldl (·.insert ·) allNodes
+  allNodes := (nodesFromMap proofEdges).foldl (·.insert ·) allNodes
+  allNodes := (nodesFromMap defEdges).foldl (·.insert ·) allNodes
   allNodes := (nodesFromMap docRefEdges).foldl (·.insert ·) allNodes
 
-  -- Step 6: Classify nodes and record modules
-  IO.eprintln s!"[Unified] Classifying {allNodes.size} nodes..."
-  let mut nodeTypes : NameMap DeclarationType := {}
-  let mut nodeModules : NameMap Name := {}
-  for name in allNodes.toList do
-    nodeTypes := nodeTypes.insert name (classifyDeclarationType env name)
-    let modName : Name := match env.getModuleIdxFor? name with
-      | some idx => env.header.moduleNames[idx.toNat]!
-      | none => .anonymous
-    nodeModules := nodeModules.insert name modName
+  -- Phase 4: Lookup node types and modules from pre-computed context
+  IO.eprintln s!"[Unified] Populating node metadata..."
+  let nodeTypes : NameMap DeclarationType := allNodes.foldl (fun acc name =>
+    match ctx.declTypes.find? name with
+    | some ty => acc.insert name ty
+    | none => acc.insert name .other
+  ) {}
 
-  -- Step 7: Categorize proof/def edges
-  IO.eprintln "[Unified] Categorizing edges..."
-  let mut proofEdges : NameMap (Array Name) := {}
-  let mut defEdges : NameMap (Array Name) := {}
-
-  for (source, targets) in proofDepsGraph.toList do
-    let sourceType := nodeTypes.find? source |>.getD .other
-    if sourceType == .theorem then
-      proofEdges := proofEdges.insert source targets
-    else
-      defEdges := defEdges.insert source targets
+  let nodeModules : NameMap Name := allNodes.foldl (fun acc name =>
+    match ctx.declModules.find? name with
+    | some mod => acc.insert name mod
+    | none => acc.insert name .anonymous
+  ) {}
 
   return {
     nodes := allNodes

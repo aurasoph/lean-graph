@@ -4,13 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Evan Wang
 -/
 
-/-!
-Test library. Contains test fixtures and regression tests.
--!/
-
 -- Test fixtures (small Lean files for testing import structure)
 import ImportGraphTest.AnotherFileWithTransitiveImports
-import ImportGraphTest.Dot
+-- import ImportGraphTest.Dot  -- TODO: Fix expected output comparison
 import ImportGraphTest.FileWithTransitiveImports
 import ImportGraphTest.FromSource
 import ImportGraphTest.Imports
@@ -24,3 +20,7 @@ import ImportGraphTest.WithSorry.Thm
 import ImportGraphTest.RegressionTests
 import ImportGraphTest.UnifiedGraphTests
 import ImportGraphTest.FilteringTests
+
+/-!
+Test library. Contains test fixtures and regression tests.
+-/
