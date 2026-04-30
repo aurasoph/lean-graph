@@ -12,6 +12,7 @@ import ImportGraph.Export.DotFile
 import ImportGraph.Export.Gexf
 import ImportGraph.Export.DotFileUnified
 import ImportGraph.Export.NdjsonUnified
+import ImportGraph.Export.ModuleAggregation
 import ImportGraph.Graph.Filter
 import ImportGraph.Graph.TransitiveClosure
 import ImportGraph.Graph.TypeDeps
@@ -128,6 +129,30 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
               | _ => false)
         for output in ndjsonOutputs do
           ImportGraph.Unified.Export.writeUnifiedGraphToNdjson unifiedGraph output allowedEdgeTypes
+
+      -- Handle aggregation (module level)
+      if let some aggFlag := args.flag? "aggregate" then
+        let aggMode := (aggFlag.as! String).toLower
+        if aggMode == "module" then
+          IO.eprintln "[Unified] Building module-level aggregation..."
+          let moduleGraph := ImportGraph.Unified.Aggregation.buildModuleGraph unifiedGraph
+
+          -- Output module graph in requested formats
+          let outputs := match args.variableArgsAs! String with
+            | #[] => #[]
+            | outputs => outputs.filter (fun (o : String) =>
+                match (o : FilePath).extension with
+                | some "csv" => true
+                | some "dot" => true
+                | _ => false)
+
+          for output in outputs do
+            match (output : FilePath).extension with
+            | some "csv" =>
+              ImportGraph.Unified.Aggregation.writeModuleGraphToCSV moduleGraph output
+            | some "dot" =>
+              ImportGraph.Unified.Aggregation.writeModuleGraphToDot moduleGraph output
+            | _ => pure ()
 
       return {}  -- Return empty for GEXF (unified doesn't support GEXF yet)
 
@@ -303,6 +328,7 @@ def graph : Cmd := `[Cli|
     "show-transitive";         "Show transitively redundant edges."
     "mathematical";            "Filter out ubiquitous constants (Eq, rfl, Nat, etc.) to provide a cleaner mathematical map."
     "edge-types" : String;     "For unified mode: comma-separated edge types to include. Valid: extends,field,sig,proof,def,docref. Default: all."
+    "aggregate" : String;      "For unified mode: aggregate to a coarser level. 'module' groups declarations by their source file. Outputs CSV or DOT format."
     "to" : Array ModuleName;   "Only show the upstream imports of the specified modules."
     "from" : Array ModuleName; "Only show the downstream dependencies of the specified modules."
     "exclude-meta";            "Exclude any files starting with `Mathlib.[Tactic|Lean|Util|Mathport]`."
