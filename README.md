@@ -1,223 +1,120 @@
-# Mathlib4 Dependency Graphs
+# Mathlib Dependency Analysis via Lean Metaprogramming
 
-Dependency graphs for [Mathlib4](https://github.com/leanprover-community/mathlib4), generated with this repository's `graph` tool.
+Extracts the complete dependency structure of Mathlib by walking Lean's compiled kernel environment. You get a queryable graph where each node is a documented declaration and edges represent 6 kinds of dependencies: inheritance, fields, type signatures, proof invocations, definitions, and docstring references.
 
 ## Interactive Web Explorer
 
 **[Explore online →](https://aurasoph.github.io/lean-graph/)**
 
-| Graph | Nodes | Edges | Online |
-|-------|-------|-------|--------|
-| **Structures** | ~3.2K | ~9.1K | ✅ |
-| **Imports** | ~10K | ~27K | ✅ |
-| **Unified** | ~381K | ~16.1M | ❌ local only |
+| Graph | Nodes | Edges | Available |
+|-------|-------|-------|-----------|
+| **Structures** | ~3.2K | ~9.1K | ✅ Online |
+| **Imports** | ~10K | ~27K | ✅ Online |
+| **Unified** | ~46K | ~1.1M | ✅ Local (> 2.8 GB) |
 
-The unified graph is too large to serve from GitHub Pages (~2.8 GB). It is stored in Git LFS and available locally after cloning.
+## How It Works
 
-## What is the Unified Graph?
+Instead of parsing source text, this runs as a **Lean metaprogram inside the `CoreM` monad** and directly inspects Lean's compiled kernel environment. 
 
-The unified graph combines every type of dependency in Mathlib into a single database. Each node is a declaration that has its own entry in the [Mathlib documentation](https://leanprover-community.github.io/mathlib4_docs/) — the graph and the docs are in 1:1 correspondence.
+It walks `Lean.Environment.constants` to find all declarations, inspects their metadata (via `ConstantInfo` variants like `.thmInfo`, `.defnInfo`, `.inductInfo`), and extracts dependencies by reading proof bodies and definitions with `Expr.getUsedConstants`. Type signatures get walked for transitive type dependencies. Structure inheritance and field composition come from `Meta.getStructureInfo?` and `isClass`. Docstrings are parsed for backtick references.
 
-Six edge types:
+Finally, it applies the same doc-gen4 filter that governs the Mathlib docs — so the graph and documentation stay in perfect 1:1 correspondence. Result: a queryable graph where edges capture 6 kinds of semantic relationships.
 
-| Kind (in DB) | Meaning |
-|------|---------|
+## The Unified Graph
+
+The unified graph combines all dependency types into a single database:
+
+| Edge Type | Meaning |
+|-----------|---------|
 | `extends` | Structure/class inheritance |
-| `field` | Composition via field/parameter (own and inherited fields) |
-| `signature` | Type appearing in a signature |
-| `proof` | Theorem used in a proof body |
-| `def` | Declaration used in a definition body |
-| `docref` | Backtick reference (`` `Name ``) in a docstring |
+| `field` | Field/parameter composition (own and inherited) |
+| `sig` | Type appearing in a declaration's signature |
+| `proof` | Theorem/definition invoked in a proof body |
+| `def` | Declaration invoked in a definition body |
+| `docref` | Backtick reference in a docstring |
 
-Note: the DOT file (and `--edge-types` flag) uses `sig` as the label for signature edges; `convert_unified.py` maps this to `signature` when importing into the database.
+**Filtering modes:**
+- **Default** (recommended): 46k declarations — human-written code only, auto-generated machinery excluded
+- **Exhaustive** (`--include-aux`): 308k declarations — everything including compiler-generated artifacts
 
-See [FILTERING.md](FILTERING.md) for the filtering design, including:
-- **Default mode**: 46k declarations (human-written code only)
-- **Exhaustive mode** (`--include-aux`): 308k declarations (everything)
-- When to use each mode and examples
+See [FILTERING.md](FILTERING.md) for detailed filtering design and when to use each mode.
 
-See also [GRAPH_VALIDATION_TESTS.md](GRAPH_VALIDATION_TESTS.md) for specific test cases that define the graph's quality.
+## Regenerating the Unified Graph
 
-## Output Formats
+To rebuild the graph against a fresh Mathlib4 checkout:
 
-The graph tool supports multiple output formats:
+### 1. Set up the dependency
 
-| Format | Use Case | Example |
-|--------|----------|---------|
-| **DOT** (.dot) | Graph visualization with Graphviz | `lake exe graph output.dot` |
-| **CSV** (_nodes.csv, _edges.csv) | Spreadsheet analysis | Companion to .dot files |
-| **NDJSON** (.ndjson) | Streaming, Python/data science | `lake exe graph output.ndjson` |
-| **Module-level CSV/DOT** | Architecture analysis | `--aggregate module output.csv` |
-
-### Example: Python Analysis with NDJSON
+From inside a fully-built Mathlib4 repository:
 
 ```bash
-# Generate NDJSON format (streaming-friendly for large graphs)
-lake exe graph --mode unified --to Mathlib output.ndjson
-
-# Then analyze in Python
-python3 << 'EOF'
-import json
-with open('output.ndjson') as f:
-    for line in f:
-        node = json.loads(line)
-        print(f"{node['name']}: {len(node['edges'])} deps")
-EOF
-```
-
-### Example: Module-Level Architecture
-
-```bash
-# See which files depend on which (7.5k modules instead of 46k declarations)
-lake exe graph --mode unified --to Mathlib --aggregate module arch.csv
-
-# Outputs: arch_nodes.csv (modules) and arch_edges.csv (inter-module dependencies with weights)
-```
-
-## Project Structure
-
-- `ImportGraph/`: Core Lean library for graph construction and filtering.
-- `MainGraph.lean`: Source for `lake exe graph`.
-- `MainExportStatements.lean`: Source for `lake exe export_statements`.
-- `docs/`: Web explorer assets and database conversion scripts.
-- `AGENT_GUIDE.md`: Technical guide for querying the databases via Python/SQLite.
-
-## Generating Graphs
-
-Graphs are generated from within a Mathlib4 checkout with this repo wired in as the `importGraph` dependency.
-
-### Quick Start: Generate the Unified Graph
-
-Assuming you have a built Mathlib4 checkout:
-
-```bash
-# 1. Set up import-graph dependency in mathlib4
 cd /path/to/mathlib4
+
+# Add this repo as a local dependency
 cat >> lakefile.lean << 'EOF'
-require importGraph from "/path/to/lean-graph"
+require importGraph from "/path/to/import-graph"
 EOF
-lake update importGraph
+
+# Build the library
 lake build ImportGraph
+```
 
-# 2. Generate the graph
-lake exe graph --mode unified --to Mathlib /path/to/lean-graph/mathlib_graphs/unified_graph.dot
+### 2. Generate the graph
 
-# 3. Convert to SQLite database
-cd /path/to/lean-graph
+```bash
+lake exe graph --mode unified --to Mathlib /path/to/import-graph/output/unified_graph.dot
+```
+
+This produces:
+- `unified_graph.dot` — graph edges with semantic labels
+- `unified_graph_nodes.csv` — node metadata (name, declaration type, module)
+
+### 3. Convert to SQLite
+
+```bash
+cd /path/to/import-graph
+
 python3 docs/convert_unified.py \
-  mathlib_graphs/unified_graph.dot \
-  mathlib_graphs/unified_graph_nodes.csv \
+  output/unified_graph.dot \
+  output/unified_graph_nodes.csv \
   docs/data/unified.db
+```
 
-# 4. Browse locally
+### 4. Browse locally
+
+```bash
 python3 -m http.server 8000 --directory docs/
 # Open http://localhost:8000
 ```
 
-### Setup
-
-1. Clone Mathlib4 (it needs to be fully built — `lake build` takes several hours the first time):
-
-```bash
-git clone https://github.com/leanprover-community/mathlib4
-cd mathlib4
-lake build
-```
-
-2. In `mathlib4/lakefile.lean`, replace the existing `importGraph` require line with a path pointing to this repo:
-
-```lean
-require importGraph from "/path/to/lean-graph"
-```
-
-3. Update the manifest and build:
-
-```bash
-lake update importGraph
-lake build ImportGraph
-```
-
-After this, `lake exe graph` uses this repo's version.
-
-### Unified graph (recommended)
-
-The unified graph combines all edge types into a single database. Run from inside the `mathlib4` directory:
-
-```bash
-cd /path/to/mathlib4
-
-lake exe graph --mode unified --to Mathlib /path/to/lean-graph/mathlib_graphs/unified_graph.dot
-```
-
-This produces two files automatically:
-- `unified_graph.dot` — edges with kind labels
-- `unified_graph_nodes.csv` — node metadata (name, decl_type, module)
-
-Then convert to SQLite:
-
-```bash
-cd /path/to/lean-graph
-python3 docs/convert_unified.py mathlib_graphs/unified_graph.dot mathlib_graphs/unified_graph_nodes.csv docs/data/unified.db
-```
-
-To include only specific edge types:
+**Optional: Include specific edge types only**
 
 ```bash
 lake exe graph --mode unified --edge-types proof,sig,extends --to Mathlib output.dot
 ```
 
-### Structures and imports graphs
+## Other graph formats
 
-These are the small graphs served online. Run from inside the `mathlib4` directory, outputting into `lean-graph/mathlib_graphs/` with the exact names `convert_to_db.py` expects:
-
-```bash
-cd /path/to/mathlib4
-
-lake exe graph --mode structures --to Mathlib /path/to/lean-graph/mathlib_graphs/mathlib_structures.dot
-lake exe graph --to Mathlib /path/to/lean-graph/mathlib_graphs/mathlib_imports.dot
-```
-
-Then build the databases:
+The tool also outputs module-level aggregations and import-only graphs:
 
 ```bash
-cd /path/to/lean-graph
-python3 docs/convert_to_db.py
-# Reads mathlib_graphs/mathlib_structures.dot and mathlib_graphs/mathlib_imports.dot
-# Outputs docs/data/structures.db and docs/data/imports.db
+# Module architecture (file-level dependencies)
+lake exe graph --mode unified --aggregate module mathlib_modules.csv
+
+# Import structure (file imports only)
+lake exe graph --to Mathlib mathlib_imports.dot
+
+# Fine-grained structures (inheritance and composition)
+lake exe graph --mode structures --to Mathlib mathlib_structures.dot
 ```
 
-### Exporting declaration signatures
-
-Export all declaration signatures to JSONL (for LLM-based processing):
+For data analysis, use NDJSON format:
 
 ```bash
-cd /path/to/mathlib4
-
-# Pretty mode: uses Lean's notation unexpanders (+ * ^ instead of instHAdd.hAdd etc.)
-# Requires the Lean interpreter — run with `lean --run`, not the compiled binary
-lake env lean --run /path/to/lean-graph/MainExportStatements.lean -- --to Mathlib --pretty --output /path/to/lean-graph/docs/data/statements.jsonl
+lake exe graph --mode unified --to Mathlib output.ndjson
 ```
 
-Each line: `{"name":"...","module":"...","decl_type":"...","signature":"...","docstring":"..."}`.
-
-### Other flags
-
-```bash
-# Exhaustive mode — bypasses the doc-aligned filter, includes compiler-generated declarations
-lake exe graph --mode unified --include-aux --to Mathlib output.dot
-```
-
-## Running the Web Explorer Locally
-
-```bash
-git lfs install
-git clone https://github.com/aurasoph/lean-graph
-cd lean-graph
-python3 -m http.server 8000 --directory docs/
-# Open http://localhost:8000
-```
-
-The unified graph (too large for GitHub Pages) is fully available in the local server.
+See [FILTERING.md](FILTERING.md) and `lake exe graph --help` for all options.
 
 ## License
 
