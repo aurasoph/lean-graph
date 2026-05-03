@@ -1,131 +1,77 @@
 # Graph Filtering Guide
 
-## Overview
+By default, the tool only shows human-written, documented code. You can also get the full graph including compiler machinery and internal details.
 
-The import-graph tool filters declarations by default to focus on **human-written, documented code**. This produces a cleaner, more meaningful dependency graph. However, you can see the complete graph including all auto-generated and internal machinery.
-
-## Default Filtering (Recommended for Analysis)
-
-By default, ~46k declarations are included:
+## Default Mode (Recommended)
 
 ```bash
 lake exe graph --to Mathlib --mode unified output.dot
 ```
 
-**What's filtered out:**
-- Auto-generated declarations (`eq_N`, `proof_N`, `match_N`, `omega_N`)
-- Internal/private declarations (prefixed with `_private` or `_`)
-- Compiler machinery (raw recursors, NoConfusion types, matchers)
-- Auxiliary recursors and other internal helpers
-- Non-explicit API (declarations without source documentation range)
+~46k declarations, ~1.1M edges. This is what most people want—it matches the Mathlib documentation exactly.
 
-**Characteristics:**
-- ~46k nodes in Lean+Std
-- ~1.1M edges across 6 semantic types
-- Focuses on mathematical and user-facing content
-- Clean for understanding code structure and dependencies
+Filters out:
+- Auto-generated junk (`eq_N`, `proof_N`, `match_N`, etc.)
+- Internal/private stuff (prefixed with `_private` or `_`)
+- Compiler machinery (recursors, NoConfusion, matchers)
+- Anything without a docstring
 
-**Use cases:**
-- Understanding module architecture
-- Mathematical dependency analysis
-- Refactoring planning within human code
-- Identifying which libraries/functions matter
+Good for understanding module structure, mathematical dependencies, and refactoring planning.
 
-## Exhaustive Mode (All Declarations)
-
-Include everything including compiler-generated and internal machinery:
+## Exhaustive Mode (`--include-aux`)
 
 ```bash
 lake exe graph --to Mathlib --mode unified --include-aux output.dot
 ```
 
-**What's included:**
-- All auto-generated declarations (300k+ total in Mathlib)
-- Private/internal declarations
-- Compiler machinery and recursors
-- Instance machinery and type class scaffolding
-- Everything Lean generates or synthesizes
+~308k declarations, ~8.4M edges. Everything: auto-generated, internal, machinery, compiler artifacts.
 
-**Characteristics:**
-- ~308k nodes (6.7x larger)
-- ~8.4M edges (7.6x more edges)
-- Includes all transitive dependencies
-- Shows complete picture of how Lean builds up the system
+Use this when you need to see *everything*: full refactoring, compliance audits, understanding how Lean generates code, migration planning.
 
-**Use cases:**
-- Full codebase refactoring (need to move everything)
-- Compliance/audit (need to see all dependencies)
-- Understanding Lean's internal machinery
-- Migration planning (moving between versions)
-- Analyzing mechanical patterns in generated code
+## Quick Comparison
 
-## Comparison: Filtered vs. Exhaustive
-
-| Aspect | Filtered (Default) | Exhaustive (`--include-aux`) |
-|--------|-------------------|------------------------------|
-| **Scope** | Human-written code | Everything (human + generated) |
+| | Default | Exhaustive |
+|---|---------|-----------|
 | **Nodes** | 46k | 308k (6.7x) |
 | **Edges** | 1.1M | 8.4M (7.6x) |
-| **Best for** | Analysis, understanding | Refactoring, audits, internals |
-| **Noise level** | Low | High (lots of machinery) |
-| **Edge types** | 6 semantic types | All dependencies lumped together |
-| **Documentation** | All nodes have source docs | Many nodes auto-generated |
+| **Edge types** | 6 semantic types | Generic |
+| **Speed** | ~5-10 min | ~30-60 min |
+| **Use for** | Analysis | Full refactoring, audits |
 
 ## Examples
 
-### Example 1: Understand Nat dependencies
+**Understand Nat usage:**
 ```bash
-# Clean view: what mathematical code depends on Nat
 lake exe graph --to Mathlib --mode unified --edge-types proof,sig output.dot
+```
 
-# Exhaustive: see every last place Nat is used, including internals
+**See internals too:**
+```bash
 lake exe graph --to Mathlib --mode unified --include-aux --edge-types proof,sig output.dot
 ```
 
-### Example 2: Refactoring impact
+**Refactoring: what must move together?**
 ```bash
-# Before refactoring, see what must move together
 lake exe graph --to Mathlib --mode unified --include-aux output.dot
-
-# Understand the mathematical dependencies
-lake exe graph --to Mathlib --mode unified output.dot
 ```
 
-### Example 3: Compliance/audit
+**Compliance audit:**
 ```bash
-# Full picture: all dependencies and their sources
 lake exe graph --to Mathlib --mode unified --include-aux output.ndjson
-# Then analyze in Python/SQL to track all usage
 ```
 
-## Edge Semantics (Filtered Mode Only)
+## Edge Types (Filtered Mode)
 
-The filtered graph includes 6 semantic edge types. Exhaustive mode doesn't distinguish:
+Default mode distinguishes between edge types: **extends**, **field**, **sig**, **proof**, **def**, **docref**. This tells you *why* one thing depends on another. Exhaustive mode doesn't distinguish—just lumps everything together.
 
-- **extends**: Structure inheritance
-- **field**: Field/parameter type references
-- **sig**: Types appearing in declarations
-- **proof**: Invocations in proof bodies
-- **def**: Invocations in definitions
-- **docref**: Backtick references in docstrings
+## How Filtering Works
 
-This helps answer: "Why does X depend on Y?" The exhaustive graph doesn't make this distinction.
+Uses the same logic as [doc-gen4](https://github.com/leanprover-community/doc-gen4): include a declaration if it would appear in the Mathlib docs. No internal details, no auto-generated children, no private stuff.
 
-## Filtering Details
+## Performance Tips
 
-The filtering matches [doc-gen4](https://github.com/leanprover-community/doc-gen4)'s visible API definition:
-- A node is included iff it would appear as a standalone entry in the Lean docs
-- Auto-generated "ghost" children are excluded
-- Internal details and private declarations are excluded
-
-## Performance Notes
-
-- **Filtered graphs** process faster (46k declarations)
-- **Exhaustive graphs** are slower (308k declarations + 7.6x edges)
-- **NDJSON format** is streaming-friendly for both
-- **DOT format** produces very large files in exhaustive mode
-
-For large graphs, consider:
-- Using `--aggregate module` for module-level view
-- Filtering by `--edge-types` to reduce edges
-- Using `--from` or `--to` flags to focus on sub-graphs
+- Default mode is ~2x faster than exhaustive
+- DOT gets huge in exhaustive mode; use NDJSON for large graphs
+- Use `--aggregate module` for file-level view
+- Use `--edge-types proof,sig` to reduce noise
+- Use `--from`/`--to` for sub-graphs

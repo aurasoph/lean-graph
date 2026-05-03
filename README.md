@@ -22,22 +22,20 @@ Finally, it applies the same doc-gen4 filter that governs the Mathlib docs — s
 
 ## The Unified Graph
 
-The unified graph combines all dependency types into a single database:
+Combines all 6 edge types into one queryable database:
 
 | Edge Type | Meaning |
 |-----------|---------|
-| `extends` | Structure/class inheritance |
-| `field` | Field/parameter composition (own and inherited) |
-| `sig` | Type appearing in a declaration's signature |
-| `proof` | Theorem/definition invoked in a proof body |
-| `def` | Declaration invoked in a definition body |
-| `docref` | Backtick reference in a docstring |
+| `extends` | Structure inheritance |
+| `field` | Field composition |
+| `sig` | Type signatures |
+| `proof` | Proof invocations |
+| `def` | Definition invocations |
+| `docref` | Docstring references |
 
-**Filtering modes:**
-- **Default** (recommended): 46k declarations — human-written code only, auto-generated machinery excluded
-- **Exhaustive** (`--include-aux`): 308k declarations — everything including compiler-generated artifacts
+By default, you get ~46k declarations (human-written code only). With `--include-aux`, you get all ~308k declarations including compiler machinery.
 
-See [FILTERING.md](FILTERING.md) for detailed filtering design and when to use each mode.
+See [FILTERING.md](FILTERING.md) for detailed guidance on which mode to use.
 
 ## Regenerating the Unified Graph
 
