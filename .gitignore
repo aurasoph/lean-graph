@@ -1,100 +1,34 @@
-<<<<<<< HEAD
-
-<<<<<<< HEAD
-graph.pdf
-
-**/.DS_Store
-<<<<<<< HEAD
-=======
-
-# Generated graph files - exclude test artifacts
-# But allow the Mathlib graphs in mathlib_graphs/ and the test reference file
-*.dot
-!mathlib_graphs/*.dot
-=======
->>>>>>> e03d90e (added unified graph and streamlined infrastructure)
-!ImportGraphTest/expected.dot
-!mathlib_graphs/*.dot
-# But allow the Mathlib graphs in mathlib_graphs/ and the test reference file
-# CLI test artifacts  
-# Documentation directory - allow GitHub Pages docs/
-# Files without extensions in test directory (likely artifacts)
-# Generated graph files - exclude test artifacts
-# Instance tests and other temporary files
-# Other generated outputs
-# Text output files
-# Web explorer directory - allow for interactive visualization
-# docs/
-# web-explorer/__pycache__/
-**/.DS_Store
-*.dot
-*.gexf
-*.html
-*.txt
---help
---include-*
---mode
-=======
 # Lean/Lake
->>>>>>> 92e2720 (Fix irreducible_def body recovery and improve documentation)
 .lake/
 /build
 /lake-packages/*
 /lakefile.olean
 
-# Temporary/Analysis
-scratch/
+# Generated artifacts
+*.dot
+*.gexf
 *.log
 *.csv
+*.txt
 --help
 --include-*
 --mode
+
+# Temporary analysis
+scratch/
 global_corpus.db
 corpus_comparison.txt
 
-# Test Artifacts
+# Test artifacts
 ImportGraphTest/FileWithTransitiveImports
 ImportGraphTest/Used
-<<<<<<< HEAD
-
-<<<<<<< HEAD
-# Documentation directory (intentionally excluded - working notes)
-docs/
-<<<<<<< HEAD
->>>>>>> b34312c (Add Mathlib dependency graphs with LFS for large files)
-=======
-=======
-# Documentation directory - allow GitHub Pages docs/
-# docs/
->>>>>>> c9bc55b (Enable GitHub Pages deployment)
-
-<<<<<<< HEAD
-web-explorer/
->>>>>>> 43b41dd (renamed to make graph about structures more clear)
-=======
-# Web explorer directory - allow for interactive visualization
-<<<<<<< HEAD
-# web-explorer/
->>>>>>> 53c5d3b (reorganized)
-=======
-# web-explorer/__pycache__/
-<<<<<<< HEAD
->>>>>>> 6e18788 (probably fixed now)
-=======
-=======
 InstanceTest
 graph.pdf
 graph_variants/
-type-deps
-<<<<<<< HEAD
->>>>>>> e03d90e (added unified graph and streamlined infrastructure)
 web-explorer/server.log
->>>>>>> 7b2cba4 (i want to be a monk)
-=======
 
 # OS clutter
 **/.DS_Store
+
+# Documentation - exclude working notes but keep generated data
 docs/data/statements.jsonl
->>>>>>> 92e2720 (Fix irreducible_def body recovery and improve documentation)
-docs/data/*.db
-docs/data/*.json
