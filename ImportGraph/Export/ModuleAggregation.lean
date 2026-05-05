@@ -3,10 +3,9 @@ Copyright (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Evan Wang
 -/
-module
 
-public import ImportGraph.Graph.Unified
-public import ImportGraph.Types
+import ImportGraph.Graph.Unified
+import ImportGraph.Types
 import Lean.Data.NameMap.Basic
 open Lean
 open ImportGraph.Unified
@@ -37,7 +36,7 @@ public structure ModuleGraph where
   edgeCounts : NameMap (NameMap Nat)
 
 /-- Build module-level graph by aggregating declaration dependencies -/
-public def buildModuleGraph (g : UnifiedGraph) : ModuleGraph :=
+def buildModuleGraph (g : UnifiedGraph) : ModuleGraph :=
   -- Collect all modules
   let nodes : Std.HashSet Name :=
     g.nodeModules.foldl (fun acc _ modName =>
@@ -85,7 +84,7 @@ public def buildModuleGraph (g : UnifiedGraph) : ModuleGraph :=
   { nodes, edges, edgeCounts }
 
 /-- Write module-level aggregated graph to CSV format -/
-public def writeModuleGraphToCSV (mg : ModuleGraph) (filePath : System.FilePath) : IO Unit := do
+def writeModuleGraphToCSV (mg : ModuleGraph) (filePath : System.FilePath) : IO Unit := do
   IO.eprintln s!"[Module Aggregation] Writing module graph to {filePath}"
 
   -- Write nodes CSV
@@ -129,7 +128,7 @@ public def writeModuleGraphToCSV (mg : ModuleGraph) (filePath : System.FilePath)
   IO.eprintln s!"[Module Aggregation] Edges file: {edgesPath}"
 
 /-- Write module-level aggregated graph to DOT format -/
-public def writeModuleGraphToDot (mg : ModuleGraph) (filePath : System.FilePath) : IO Unit := do
+def writeModuleGraphToDot (mg : ModuleGraph) (filePath : System.FilePath) : IO Unit := do
   IO.eprintln s!"[Module Aggregation] Writing module graph to {filePath}"
 
   let handle ← IO.FS.Handle.mk filePath IO.FS.Mode.write

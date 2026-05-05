@@ -4,10 +4,9 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jon Eugster
 -/
-module
 
-public import Lean.Data.NameMap.Basic
-public import Lean.Environment
+import Lean.Data.NameMap.Basic
+import Lean.Environment
 import Lean.Meta.Match.MatcherInfo
 
 open Lean
@@ -56,7 +55,7 @@ Metadata can be stored in forms of attributes, currently we record the following
 * `in_module` (Bool): whether the file belongs to the main module
   (used to strip the first part of the name when displaying).
 -/
-public def Graph.toGexf (graph : NameMap (Array Name)) (module : Name) (env : Environment) : String :=
+def Graph.toGexf (graph : NameMap (Array Name)) (module : Name) (env : Environment) : String :=
   let sizes : NameMap Nat := getNumberOfDeclsPerFile env
   let nodes : String := graph.foldl (fun acc n _ => acc ++ nodeTemplate n module (sizes.getD n 0)) ""
   let edges : String := graph.foldl (fun acc n i => acc ++ (i.foldl (fun b j => b ++ edgeTemplate j n) "")) ""

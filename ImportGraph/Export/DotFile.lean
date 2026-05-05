@@ -4,9 +4,8 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kim Morrison, Jon Eugster, Evan Wang
 -/
-module
 
-public import Lean.Data.NameMap.Basic
+import Lean.Data.NameMap.Basic
 
 open Lean
 
@@ -34,7 +33,7 @@ Write an import graph directly to a file handle in ".dot" format.
 This streaming version avoids building the entire string in memory,
 which is important for large graphs (1M+ edges).
 -/
-public def writeDotGraph
+def writeDotGraph
     (handle : IO.FS.Handle)
     (graph : NameMap (Array Name))
     (_unused : NameSet := ∅)
@@ -96,7 +95,7 @@ Note: For very large graphs (1M+ edges), consider using `writeDotGraph` instead
 to stream directly to a file and avoid memory issues.
 >>>>>>> ccf9d1a (Remove visualization attributes from DOT exports)
 -/
-public def asDotGraph
+def asDotGraph
     (graph : NameMap (Array Name))
     (_unused : NameSet := ∅)
     (header := "import_graph")

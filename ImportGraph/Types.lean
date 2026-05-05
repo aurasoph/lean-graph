@@ -4,9 +4,8 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: ImportGraph Contributors
 -/
-module
 
-public import Lean.Data.NameMap.Basic
+import Lean.Data.NameMap.Basic
 
 open Lean
 
@@ -96,7 +95,7 @@ public inductive DeclarationType where
   | other : DeclarationType
   deriving Inhabited, BEq, Repr
 
-public def DeclarationType.shape : DeclarationType → String
+def DeclarationType.shape : DeclarationType → String
   | .structure | .class => "ellipse"
   | .instance | .definition | .opaque | .axiom => "box"
   | .theorem => "diamond"
@@ -105,7 +104,7 @@ public def DeclarationType.shape : DeclarationType → String
   | .recursor => "triangle"
   | .other => "ellipse"
 
-public def DeclarationType.fillColor : DeclarationType → String
+def DeclarationType.fillColor : DeclarationType → String
   | .structure => "#b3d9ff"
   | .class => "#99ccff"
   | .instance => "#ffd9b3"
@@ -119,7 +118,7 @@ public def DeclarationType.fillColor : DeclarationType → String
   | .axiom => "#ffb3b3"
   | .other => "#e0e0e0"
 
-public def DeclarationType.label : DeclarationType → String
+def DeclarationType.label : DeclarationType → String
   | .structure => "struct"
   | .class => "class"
   | .instance => "inst"

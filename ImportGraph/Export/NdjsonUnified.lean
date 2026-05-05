@@ -3,10 +3,9 @@ Copyright (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Evan Wang
 -/
-module
 
-public import ImportGraph.Graph.Unified
-public import ImportGraph.Types
+import ImportGraph.Graph.Unified
+import ImportGraph.Types
 import Lean.Data.Json
 open Lean
 open ImportGraph.Unified
@@ -85,7 +84,7 @@ private def buildEdgesJson (name : Name)
   edges
 
 /-- Write unified graph to NDJSON format (newline-delimited JSON) -/
-public def writeUnifiedGraphToNdjson
+def writeUnifiedGraphToNdjson
     (g : UnifiedGraph)
     (filePath : System.FilePath)
     (allowedEdgeTypes : Option (Std.HashSet String) := none) : IO Unit := do

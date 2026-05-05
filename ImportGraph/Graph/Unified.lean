@@ -4,11 +4,10 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: ImportGraph Contributors
 -/
-module
 
-public import Lean.Environment
-public import Lean.CoreM
-public import ImportGraph.Types
+import Lean.Environment
+import Lean.CoreM
+import ImportGraph.Types
 import Lean.Data.NameMap.Basic
 import Lean.Structure
 import Lean.Class
@@ -18,7 +17,7 @@ import ImportGraph.Graph.Structures
 import ImportGraph.Graph.TypeDeps
 import ImportGraph.Graph.ProofDeps
 import ImportGraph.Graph.TransitiveClosure
-public import ImportGraph.Graph.FilterCommon
+import ImportGraph.Graph.FilterCommon
 
 open Lean
 open ImportGraph.Types
@@ -228,7 +227,7 @@ Phase 2: Edge computation (parallel builds)
 Phase 3: Node merging
 Phase 4: Type/module lookup from pre-computed context
 -/
-public def unifiedGraph (env : Environment) (includeAll : Bool := false) : CoreM UnifiedGraph := do
+def unifiedGraph (env : Environment) (includeAll : Bool := false) : CoreM UnifiedGraph := do
 
   -- Phase 1: Discover all included symbols, classify types, map modules
   IO.eprintln "[Unified] Discovering symbols..."
@@ -282,13 +281,13 @@ public def unifiedGraph (env : Environment) (includeAll : Bool := false) : CoreM
     docRefEdges := docRefEdges
   }
 
-public def UnifiedGraph.totalEdgeCount (g : UnifiedGraph) : Nat :=
+def UnifiedGraph.totalEdgeCount (g : UnifiedGraph) : Nat :=
   let count (m : NameMap (Array Name)) := m.foldl (fun acc _ deps => acc + deps.size) 0
   count g.extendsEdges + count g.fieldEdges + count g.signatureEdges +
   count g.proofEdges + count g.defEdges + count g.docRefEdges
 
 /-- Get edge count for a specific edge type -/
-public def UnifiedGraph.edgeCountByType (g : UnifiedGraph) (et : EdgeType) : Nat :=
+def UnifiedGraph.edgeCountByType (g : UnifiedGraph) (et : EdgeType) : Nat :=
   let count (m : NameMap (Array Name)) := m.foldl (fun acc _ deps => acc + deps.size) 0
   match et with
   | .extends => count g.extendsEdges

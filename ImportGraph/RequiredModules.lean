@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Evan Wang
 -/
 
-module
 
 /-!
 # RequiredModules (Deprecated)
@@ -12,7 +11,7 @@ module
 This module is deprecated. Use `import ImportGraph.Imports.RequiredModules` instead.
 -/
 
-public import ImportGraph.Imports.RequiredModules
+import ImportGraph.Imports.RequiredModules
 import Lean
 
 open Lean

@@ -4,10 +4,9 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: ImportGraph Contributors
 -/
-module
 
-public import ImportGraph.Graph.Unified
-public import ImportGraph.Types
+import ImportGraph.Graph.Unified
+import ImportGraph.Types
 open Lean
 open ImportGraph.Unified
 open ImportGraph.Types
@@ -33,7 +32,7 @@ private def writeNodesCSV (g : UnifiedGraph) (csvPath : String) : IO Unit := do
     csv.putStrLn s!"\"{name}\",\"{declType.label}\",\"{modName}\""
 
 /-- Write unified graph to DOT format with categorized edges -/
-public def writeUnifiedGraphToFile
+def writeUnifiedGraphToFile
     (g : UnifiedGraph)
     (filePath : System.FilePath)
     (allowedEdgeTypes : Option (Std.HashSet String) := none) : IO Unit := do

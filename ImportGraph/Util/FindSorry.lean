@@ -4,9 +4,8 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jon Eugster
 -/
-module
 
-public import Lean.Environment
+import Lean.Environment
 import Lean.Util.Sorry
 import ImportGraph.Lean.Environment
 
@@ -25,7 +24,7 @@ Useful for tracking proof obligations and incomplete work in a project.
 /--
 Array of all constant names which contain a `sorry`.
 -/
-public def allConstantsWithSorry (env : Environment) : NameSet :=
+def allConstantsWithSorry (env : Environment) : NameSet :=
   env.constants.fold (init := ∅) fun acc name info =>
     match info with
     | .thmInfo val => if val.value.hasSorry then acc.insert name else acc
@@ -40,7 +39,7 @@ public def allConstantsWithSorry (env : Environment) : NameSet :=
 /--
 Array of all module names of modules containing at least one `sorry`.
 -/
-public def allModulesWithSorry (env : Environment) : NameSet :=
+def allModulesWithSorry (env : Environment) : NameSet :=
   (allConstantsWithSorry env).foldl (init := ∅) fun acc n => match env.getModuleFor? n with
     | some module => acc.insert module
     | none => acc -- TODO: should there be a warning/error if module cannot be found?
