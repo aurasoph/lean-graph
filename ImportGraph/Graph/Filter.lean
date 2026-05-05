@@ -74,11 +74,12 @@ filtered node.
 -/
 public def filterGraph (graph : NameMap (Array Name)) (filter : Name → Bool)
     (replacement : Option Name := none) : NameMap (Array Name) :=
-  -- Create a list of all files imported by any of the filtered files
-  -- and remove all imports starting with `Mathlib` to avoid loops.
+  -- Create a list of all files imported by any of the filtered files,
+  -- excluding imports that are themselves filtered (to avoid the replacement node
+  -- pointing back at other removed nodes).
   let replImports := graph.toList.flatMap
     (fun ⟨n, i⟩ => if filter n then i.toList else [])
-    |>.eraseDups |>.filter (¬ Name.isPrefixOf `Mathlib ·) |>.toArray
+    |>.eraseDups |>.filter (¬ filter ·) |>.toArray
   let graph := graph.filterMap (fun node edges => if filter node then none else some <|
     -- If the node `node` is not filtered, modify the `edges` going into `node`.
     edges.toList.flatMap (fun source =>
