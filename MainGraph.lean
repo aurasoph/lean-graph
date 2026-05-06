@@ -156,21 +156,9 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
       return {}  -- Return empty for GEXF (unified doesn't support GEXF yet)
 
     let mut graph := graphInit
-    let modulesWithSorry := if args.hasFlag "mark-sorry" then ImportGraph.allModulesWithSorry env else ∅
 
     if let Option.some f := from? then
       graph := graph.downstreamOf (NameSet.ofArray f)
-
-    let unused ←
-      match args.flag? "to" with
-      | some _ =>
-        let init := NameSet.ofArray to
-        let ctx := { options := {}, fileName := "<input>", fileMap := default }
-        let state := { env }
-        let used ← Prod.fst <$> (CoreM.toIO (env.transitivelyRequiredModules' to.toList) ctx state)
-        let used := used.foldl (init := init) (fun s _ t => s ∪ t)
-        pure <| graph.foldl (fun acc n _ => if used.contains n then acc else acc.insert n) NameSet.empty
-      | none => pure NameSet.empty
     let includeLean := args.hasFlag "include-lean"
     let includeStd := args.hasFlag "include-std" || includeLean
     let includeDeps := args.hasFlag "include-deps" || includeStd
@@ -236,8 +224,6 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
         isPrefixOf `Mathlib.Mathport n ∨
         isPrefixOf `Mathlib.Util n)
       graph := graph.filterGraph filterMathlibMeta (replacement := `«Mathlib.Tactics»)
-
-    let markedPackage : Option Name := if args.hasFlag "mark-package" then toModule else none
 
     -- Write DOT files directly to avoid building massive strings in memory
     -- This must be done inside withImportModules while we have access to the graph data
