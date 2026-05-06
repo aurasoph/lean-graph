@@ -91,7 +91,7 @@ public def writeModuleGraphToCSV (mg : ModuleGraph) (filePath : System.FilePath)
   -- Write nodes CSV
   let fpStr := filePath.toString
   let nodesPath : String := if fpStr.endsWith ".csv"
-                            then fpStr.dropRight 4 ++ "_nodes.csv"
+                            then (fpStr.dropEnd 4).toString ++ "_nodes.csv"
                             else fpStr ++ "_nodes.csv"
 
   let nodesHandle ← IO.FS.Handle.mk nodesPath IO.FS.Mode.write
