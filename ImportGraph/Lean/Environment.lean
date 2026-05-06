@@ -4,8 +4,9 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kim Morrison
 -/
+module
 
-import Lean.Environment
+public import Lean.Environment
 
 /-!
 # Environment Utilities
@@ -19,7 +20,7 @@ other environment-level queries needed for analysis.
 namespace Lean
 
 /-- Return the name of the module in which a declaration was defined. -/
-def Environment.getModuleFor? (env : Environment) (declName : Name) : Option Name :=
+public def Environment.getModuleFor? (env : Environment) (declName : Name) : Option Name :=
   match env.getModuleIdxFor? declName with
   | none =>
     if env.constants.map₂.contains declName then

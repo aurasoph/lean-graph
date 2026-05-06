@@ -3,8 +3,9 @@ Copyright (c) 2023 Kim Morrison. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kim Morrison, Paul Lezeau
 -/
+module
 
-import Lean.Data.NameMap.Basic
+public import Lean.Data.NameMap.Basic
 import Lean.Data.NameMap.AdditionalOperations
 import ImportGraph.Graph.TransitiveClosure
 
@@ -18,7 +19,7 @@ This file defines some functions to filter a graph.
 namespace Lean.NameMap
 
 /-- Restrict an import graph to only the downstream dependencies of some set of modules. -/
-def downstreamOf (m : NameMap (Array Name)) (targets : NameSet) : NameMap (Array Name) :=
+public def downstreamOf (m : NameMap (Array Name)) (targets : NameSet) : NameMap (Array Name) :=
   let tc := transitiveClosure m
   let P (n : Name) := targets.contains n || ((tc.find? n).getD {}).any fun j => targets.contains j
   m.foldl (init := {}) fun r n i =>
@@ -28,7 +29,7 @@ def downstreamOf (m : NameMap (Array Name)) (targets : NameSet) : NameMap (Array
       r
 
 /-- Restrict an import graph to only the transitive imports of some set of modules. -/
-def upstreamOf (m : NameMap (Array Name)) (targets : NameSet) : NameMap (Array Name) :=
+public def upstreamOf (m : NameMap (Array Name)) (targets : NameSet) : NameMap (Array Name) :=
   let tc := transitiveClosure m
   let P (n : Name) := targets.contains n || targets.any fun t => ((tc.find? t).getD {}).contains n
   m.foldl (init := {}) fun r n i =>
@@ -71,7 +72,7 @@ If the optional `(replacement : Name)` is provided, a corresponding node will be
 added together with edges to all nodes which had an incoming edge from any
 filtered node.
 -/
-def filterGraph (graph : NameMap (Array Name)) (filter : Name → Bool)
+public def filterGraph (graph : NameMap (Array Name)) (filter : Name → Bool)
     (replacement : Option Name := none) : NameMap (Array Name) :=
   -- Create a list of all files imported by any of the filtered files,
   -- excluding imports that are themselves filtered (to avoid the replacement node

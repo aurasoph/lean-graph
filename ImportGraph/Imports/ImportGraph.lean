@@ -4,9 +4,10 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kim Morrison, Paul Lezeau
 -/
+module
 
-import Lean.Environment
-import Lean.Data.NameMap.Basic
+public import Lean.Environment
+public import Lean.Data.NameMap.Basic
 
 /-!
 # Import Graph Analysis
@@ -22,7 +23,7 @@ namespace Lean.Environment
 /--
 Find the imports of a given module.
 -/
-def importsOf (env : Environment) (n : Name) : Array Name :=
+public def importsOf (env : Environment) (n : Name) : Array Name :=
   if n = env.header.mainModule then
     env.header.imports.map Import.module
   else match env.getModuleIdx? n with

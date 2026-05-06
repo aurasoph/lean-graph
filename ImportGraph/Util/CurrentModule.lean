@@ -4,6 +4,7 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jon Eugster
 -/
+module
 
 import Lake.Load.Manifest
 
@@ -20,7 +21,7 @@ Reads Lake manifest to identify which module is being analyzed.
 namespace ImportGraph
 
 /-- Read the name of the main module from the `lake-manifest`. -/
-def getCurrentModule : IO Name := do
+public def getCurrentModule : IO Name := do
 
   match (← Lake.Manifest.load? ⟨"lake-manifest.json"⟩) with
   | none =>

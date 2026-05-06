@@ -5,8 +5,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kim Morrison, Paul Lezeau, Evan Wang
 -/
 
+module
 
-import Cli.Basic
+public import Cli.Basic
 import ImportGraph.Export.DotFile
 import ImportGraph.Export.Gexf
 import ImportGraph.Export.DotFileUnified
@@ -336,5 +337,5 @@ def graph : Cmd := `[Cli|
 
 
 /-- `lake exe graph` -/
-def main (args : List String) : IO UInt32 :=
+public def main (args : List String) : IO UInt32 :=
   graph.validate args

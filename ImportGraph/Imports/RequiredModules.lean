@@ -4,10 +4,11 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kim Morrison
 -/
+module
 
-import Lean.CoreM
-import Lean.Data.NameMap.Basic
-import Lean.Environment
+public import Lean.CoreM
+public import Lean.Data.NameMap.Basic
+public import Lean.Environment
 import ImportGraph.Lean.Environment
 
 /-!

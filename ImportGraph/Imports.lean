@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Evan Wang
 -/
 
+module
 
 /-!
 # Imports (Deprecated)
@@ -11,19 +12,19 @@ Authors: Evan Wang
 This module is deprecated. Use `import ImportGraph` and select specific submodules instead.
 -/
 
-import ImportGraph.Export.DotFile
-import ImportGraph.Export.Gexf
-import ImportGraph.Graph.Filter
-import ImportGraph.Graph.TransitiveClosure
-import ImportGraph.Imports.FromSource
-import ImportGraph.Imports.ImportGraph
-import ImportGraph.Imports.Redundant
-import ImportGraph.Imports.RequiredModules
-import ImportGraph.Imports.Unused
-import ImportGraph.Lean.Environment
-import ImportGraph.Lean.Name
-import ImportGraph.Lean.WithImportModules
-import ImportGraph.Util.FindSorry
+public import ImportGraph.Export.DotFile
+public import ImportGraph.Export.Gexf
+public import ImportGraph.Graph.Filter
+public import ImportGraph.Graph.TransitiveClosure
+public import ImportGraph.Imports.FromSource
+public import ImportGraph.Imports.ImportGraph
+public import ImportGraph.Imports.Redundant
+public import ImportGraph.Imports.RequiredModules
+public import ImportGraph.Imports.Unused
+public import ImportGraph.Lean.Environment
+public import ImportGraph.Lean.Name
+public import ImportGraph.Lean.WithImportModules
+public import ImportGraph.Util.FindSorry
 public meta import ImportGraph.Export.DotFile
 public meta import ImportGraph.Export.Gexf
 public meta import ImportGraph.Graph.Filter

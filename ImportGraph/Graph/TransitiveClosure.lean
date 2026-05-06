@@ -3,8 +3,9 @@ Copyright (c) 2023 Kim Morrison. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kim Morrison, Paul Lezeau
 -/
+module
 
-import Lean.Data.NameMap.Basic
+public import Lean.Data.NameMap.Basic
 
 /-!
 # Transitive closure and reduction of a graph
@@ -18,7 +19,7 @@ namespace Lean.NameMap
 Compute the transitive closure of an import graph.
 Uses an iterative approach with a stack to avoid stack overflow.
 -/
-def transitiveClosure (m : NameMap (Array Name)) : NameMap NameSet := Id.run do
+public def transitiveClosure (m : NameMap (Array Name)) : NameMap NameSet := Id.run do
   let mut result : NameMap NameSet := {}
   let nodes := m.toList.map (·.1)
   
@@ -38,9 +39,7 @@ def transitiveClosure (m : NameMap (Array Name)) : NameMap NameSet := Id.run do
         let deps := (m.find? u).getD #[]
         let mut uClosure : NameSet := .ofList deps.toList
         for d in deps do
-          let depClosure := result.find? d |>.getD {}
-          for name in depClosure do
-            uClosure := uClosure.insert name
+          uClosure := uClosure.union (result.find? d |>.getD {})
         result := result.insert u uClosure
       | (u, v :: vs) :: tail =>
         -- Process child v of u
@@ -60,7 +59,7 @@ def transitiveClosure (m : NameMap (Array Name)) : NameMap NameSet := Id.run do
 Compute the transitive reduction of an import graph.
 Removes an edge (A -> C) if there is another path from A to C through B.
 -/
-def transitiveReduction (m : NameMap (Array Name)) : NameMap (Array Name) :=
+public def transitiveReduction (m : NameMap (Array Name)) : NameMap (Array Name) :=
   let closure := transitiveClosure m
   m.foldl (fun res n deps =>
     -- For each dependency d of n, check if it's reachable from any other dependency d'

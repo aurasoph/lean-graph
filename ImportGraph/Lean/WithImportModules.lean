@@ -4,8 +4,9 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kim Morrison, Paul Lezeau
 -/
+module
 
-import Lean.CoreM
+public import Lean.CoreM
 
 open Lean
 
@@ -17,7 +18,7 @@ Utilities for loading Lean modules into a CoreM environment.
 Simplifies the setup of CoreM computation with specific module imports loaded.
 -/
 
-def Core.withImportModules (modules : Array Name) {α} (f : CoreM α) : IO α := do
+public def Core.withImportModules (modules : Array Name) {α} (f : CoreM α) : IO α := do
   initSearchPath (← findSysroot)
   unsafe Lean.withImportModules (modules.map (fun m => {module := m})) {} (trustLevel := 1024)
     fun env => Prod.fst <$> Core.CoreM.toIO

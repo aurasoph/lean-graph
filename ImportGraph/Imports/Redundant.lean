@@ -4,10 +4,11 @@ Modifications (c) 2026 Evan Wang. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kim Morrison, Paul Lezeau
 -/
+module
 
-import Lean.Environment
-import Lean.Data.NameMap.Basic
-import Lean.CoreM
+public import Lean.Environment
+public import Lean.Data.NameMap.Basic
+public import Lean.CoreM
 import ImportGraph.Imports.ImportGraph
 
 open Lean
@@ -46,7 +47,7 @@ end Lean.Environment
 Return the redundant imports (i.e. those transitively implied by another import)
 of a specified module (or the current module if `none` is specified).
 -/
-def redundantImports (n? : Option Name := none) : CoreM NameSet := do
+public def redundantImports (n? : Option Name := none) : CoreM NameSet := do
   let env ← getEnv
   let imports := env.importsOf (n?.getD (env.header.mainModule))
   return env.findRedundantImports imports

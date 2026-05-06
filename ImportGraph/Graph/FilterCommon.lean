@@ -3,9 +3,10 @@ Copyright (c) 2024 ImportGraph Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: ImportGraph Contributors
 -/
+module
 
-import Lean.Environment
-import Lean.CoreM
+public import Lean.Environment
+public import Lean.CoreM
 import Lean.Meta.Instances
 import Lean.AuxRecursor
 import Lean.ProjFns
@@ -47,7 +48,7 @@ namespace Lean.Environment
 Determine if a declaration represents part of the "Explicit API" (written by a human).
 Identifies compiler-generated "ghost" declarations by checking source position.
 -/
-def isExplicitAPI (env : Environment) (name : Name) : Bool :=
+public def isExplicitAPI (env : Environment) (name : Name) : Bool :=
   match Lean.declRangeExt.find? env name with
   | none => false
   | some ranges =>
@@ -64,7 +65,7 @@ def isExplicitAPI (env : Environment) (name : Name) : Bool :=
 Get the "parent" declaration for a compiler-generated declaration.
 Used to surface the meaningful parent when expanding through filtered nodes.
 -/
-def getParentDeclaration (env : Environment) (name : Name) : Name :=
+public def getParentDeclaration (env : Environment) (name : Name) : Name :=
   if let some info := env.find? name then
     match info with
     | .ctorInfo val => val.induct
@@ -80,7 +81,7 @@ documentation entry.
 
 Pass `includeAll := true` to skip all filtering (exhaustive/debug mode).
 -/
-def shouldIncludeConstant (env : Environment) (name : Name)
+public def shouldIncludeConstant (env : Environment) (name : Name)
     (includeAll : Bool := false) : Bool :=
   if includeAll then true
   else
@@ -99,7 +100,7 @@ def shouldIncludeConstant (env : Environment) (name : Name)
 /-- Like `shouldIncludeConstant` but additionally excludes inductive types,
 opaque defs, and quotient types from proof dependency graphs (they contribute
 no proof-term content). -/
-def shouldIncludeConstantInProofDeps (env : Environment) (name : Name)
+public def shouldIncludeConstantInProofDeps (env : Environment) (name : Name)
     (includeAll : Bool := false) : Bool :=
   shouldIncludeConstant env name includeAll &&
   match env.find? name with
@@ -116,7 +117,7 @@ equation lemma), we DFS into its body to find the real declarations inside.
 Set `isProof := true` when processing proof/definition bodies to use the
 stricter `shouldIncludeConstantInProofDeps` gate.
 -/
-def applyFiltering (env : Environment) (deps : Array Name)
+public def applyFiltering (env : Environment) (deps : Array Name)
     (includeAll : Bool := false) (isProof : Bool := false) : CoreM (Array Name) := do
   let shouldInclude (n : Name) : Bool :=
     if isProof then shouldIncludeConstantInProofDeps env n includeAll
@@ -160,11 +161,11 @@ def applyFiltering (env : Environment) (deps : Array Name)
 
   return result
 
-def applyTransitiveClosure (env : Environment) (deps : Array Name)
+public def applyTransitiveClosure (env : Environment) (deps : Array Name)
     (includeAll : Bool := false) : CoreM (Array Name) :=
   applyFiltering env deps includeAll false
 
-def applyTransitiveClosureForProofDeps (env : Environment) (deps : Array Name)
+public def applyTransitiveClosureForProofDeps (env : Environment) (deps : Array Name)
     (includeAll : Bool := false) : CoreM (Array Name) :=
   applyFiltering env deps includeAll true
 

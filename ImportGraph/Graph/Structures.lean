@@ -3,12 +3,13 @@ Copyright (c) 2024 ImportGraph Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: ImportGraph Contributors
 -/
+module
 
-import Lean.Environment
-import Lean.CoreM
+public import Lean.Environment
+public import Lean.CoreM
 import Lean.Data.NameMap.Basic
 import Lean.Structure
-import ImportGraph.Graph.FilterCommon
+public import ImportGraph.Graph.FilterCommon
 
 open Lean
 
@@ -87,7 +88,7 @@ private def getFieldDependencies (env : Environment) (structName : Name) : Array
 Build the structure/typeclass relationship graph, distinguishing between
 inheritance (extends) and composition (fields).
 -/
-def analyzeStructures (env : Environment) (includeAll : Bool := false) : CoreM StructureAnalysis := do
+public def analyzeStructures (env : Environment) (includeAll : Bool := false) : CoreM StructureAnalysis := do
   let mut extendsEdges : NameMap (Array Name) := {}
   let mut fieldEdges : NameMap (Array Name) := {}
   let mut allNodes : NameSet := {}
@@ -115,7 +116,7 @@ def analyzeStructures (env : Environment) (includeAll : Bool := false) : CoreM S
   return { extendsEdges := extendsEdges, fieldEdges := fieldEdges, allNodes := allNodes }
 
 /-- Compatibility wrapper for the old structuresGraph API -/
-def structuresGraph (env : Environment) (includeAll : Bool := false) : CoreM (NameMap (Array Name)) := do
+public def structuresGraph (env : Environment) (includeAll : Bool := false) : CoreM (NameMap (Array Name)) := do
   let analysis ← analyzeStructures env includeAll
   let mut combined : NameMap (Array Name) := {}
 

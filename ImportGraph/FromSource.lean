@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Evan Wang
 -/
 
+module
 
 /-!
 # FromSource (Deprecated)
@@ -11,7 +12,7 @@ Authors: Evan Wang
 This module is deprecated. Use `ImportGraph.Imports.FromSource` instead.
 -/
 
-import ImportGraph.Imports.FromSource
+public import ImportGraph.Imports.FromSource
 import Lean
 
 open Lean

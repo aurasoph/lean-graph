@@ -3,10 +3,11 @@ Copyright (c) 2024 ImportGraph Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: ImportGraph Contributors
 -/
+module
 
-import Lean.Environment
-import Lean.CoreM
-import ImportGraph.Graph.FilterCommon
+public import Lean.Environment
+public import Lean.CoreM
+public import ImportGraph.Graph.FilterCommon
 import Lean.Data.NameMap.Basic
 import Lean.Meta.Match.MatcherInfo
 import Lean.Structure
@@ -29,7 +30,7 @@ private def getTypeDependencies (_env : Environment) (_name : Name) (info : Cons
   info.type.getUsedConstants
 
 /-- Build type dependency graph based on constant type signatures. -/
-def typeDepsGraph (env : Environment) (includeAll : Bool := false) :
+public def typeDepsGraph (env : Environment) (includeAll : Bool := false) :
     CoreM (NameMap (Array Name)) := do
   let mut graph : NameMap (Array Name) := {}
 

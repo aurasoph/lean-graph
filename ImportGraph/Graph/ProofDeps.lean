@@ -3,10 +3,11 @@ Copyright (c) 2024 ImportGraph Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: ImportGraph Contributors
 -/
+module
 
-import Lean.Environment
-import Lean.CoreM
-import ImportGraph.Graph.FilterCommon
+public import Lean.Environment
+public import Lean.CoreM
+public import ImportGraph.Graph.FilterCommon
 import Lean.Data.NameMap.Basic
 import Lean.Meta.Match.MatcherInfo
 
@@ -29,7 +30,7 @@ private def applyTransitiveClosureChunked (env : Environment) (deps : Array Name
   applyTransitiveClosureForProofDeps env deps includeAll
 
 -- Stream proof-deps graph directly to file handle
-def proofDepsGraphStreaming (env : Environment)
+public def proofDepsGraphStreaming (env : Environment)
     (handle : IO.FS.Handle)
     (includeAll : Bool := false) : CoreM Unit := do
   let mut processedCount := 0
@@ -89,7 +90,7 @@ def proofDepsGraphStreaming (env : Environment)
 /--
 Build a proof dependencies graph from the Lean environment.
 -/
-def proofDepsGraph (env : Environment) (includeAll : Bool := false) :
+public def proofDepsGraph (env : Environment) (includeAll : Bool := false) :
     CoreM (NameMap (Array Name)) := do
   let mut graph : NameMap (Array Name) := {}
   let mut processedCount := 0
