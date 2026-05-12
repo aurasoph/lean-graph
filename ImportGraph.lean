@@ -9,6 +9,8 @@ module
 public import ImportGraph.Types
 public import ImportGraph.Export.DotFile
 public import ImportGraph.Export.Gexf
+public import ImportGraph.Export.ModuleAggregation
+public import ImportGraph.Export.NamespaceAggregation
 public import ImportGraph.Graph.Filter
 public import ImportGraph.Graph.ProofDeps
 public import ImportGraph.Graph.Structures

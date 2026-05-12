@@ -270,10 +270,19 @@ public def unifiedGraph (env : Environment) (includeAll : Bool := false) : CoreM
     | none => acc.insert name .anonymous
   ) {}
 
+  -- Phase 5: Collect docstrings for included nodes
+  IO.eprintln "[Unified] Collecting docstrings..."
+  let mut nodeDocstrings : NameMap String := {}
+  for name in allNodes.toList do
+    if let some doc ← Lean.findDocString? env name then
+      if !doc.isEmpty then
+        nodeDocstrings := nodeDocstrings.insert name doc
+
   return {
     nodes := allNodes
     nodeTypes := nodeTypes
     nodeModules := nodeModules
+    nodeDocstrings := nodeDocstrings
     extendsEdges := structures.extendsEdges
     fieldEdges := structures.fieldEdges
     signatureEdges := typeDepsGraph

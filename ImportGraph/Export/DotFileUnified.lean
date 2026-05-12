@@ -23,14 +23,28 @@ companion CSV file for analysis and visualization tools.
 
 namespace ImportGraph.Unified.Export
 
-/-- Write companion nodes CSV: name,decl_type,module -/
+private def computeInDegrees (g : UnifiedGraph) : NameMap Nat :=
+  let addTargets (acc : NameMap Nat) (targets : Array Name) : NameMap Nat :=
+    targets.foldl (fun a t => a.insert t ((a.find? t |>.getD 0) + 1)) acc
+  let step (acc : NameMap Nat) (m : NameMap (Array Name)) : NameMap Nat :=
+    m.foldl (fun a _ targets => addTargets a targets) acc
+  step (step (step (step (step (step {} g.extendsEdges) g.fieldEdges)
+    g.signatureEdges) g.proofEdges) g.defEdges) g.docRefEdges
+
+private def csvEscape (s : String) : String :=
+  s.replace "\n" " " |>.replace "\r" " " |>.replace "\"" "\"\""
+
+/-- Write companion nodes CSV: name,decl_type,module,in_degree,docstring -/
 private def writeNodesCSV (g : UnifiedGraph) (csvPath : String) : IO Unit := do
   IO.eprintln s!"[Unified] Writing nodes CSV to {csvPath}"
   let csv ← IO.FS.Handle.mk ⟨csvPath⟩ IO.FS.Mode.write
-  csv.putStrLn "name,decl_type,module"
+  let inDegrees := computeInDegrees g
+  csv.putStrLn "name,decl_type,module,in_degree,docstring"
   for (name, declType) in g.nodeTypes.toList do
     let modName := (g.nodeModules.find? name |>.getD .anonymous).toString
-    csv.putStrLn s!"\"{name}\",\"{declType.label}\",\"{modName}\""
+    let deg := inDegrees.find? name |>.getD 0
+    let doc := csvEscape (g.nodeDocstrings.find? name |>.getD "")
+    csv.putStrLn s!"\"{name}\",\"{declType.label}\",\"{modName}\",{deg},\"{doc}\""
 
 /-- Write unified graph to DOT format with categorized edges -/
 public def writeUnifiedGraphToFile

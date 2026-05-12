@@ -138,6 +138,7 @@ public structure UnifiedGraph where
   nodes : NameSet
   nodeTypes : NameMap DeclarationType
   nodeModules : NameMap Name  -- name → defining Lean module
+  nodeDocstrings : NameMap String  -- name → docstring (omitted if none)
   extendsEdges : NameMap (Array Name)
   fieldEdges : NameMap (Array Name)
   signatureEdges : NameMap (Array Name)

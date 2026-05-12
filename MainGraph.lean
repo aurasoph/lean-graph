@@ -13,6 +13,7 @@ import ImportGraph.Export.Gexf
 import ImportGraph.Export.DotFileUnified
 import ImportGraph.Export.NdjsonUnified
 import ImportGraph.Export.ModuleAggregation
+import ImportGraph.Export.NamespaceAggregation
 import ImportGraph.Graph.Filter
 import ImportGraph.Graph.TransitiveClosure
 import ImportGraph.Graph.TypeDeps
@@ -130,10 +131,9 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
         for output in ndjsonOutputs do
           ImportGraph.Unified.Export.writeUnifiedGraphToNdjson unifiedGraph output allowedEdgeTypes
 
-      -- Handle aggregation (module level)
       if let some aggFlag := args.flag? "aggregate" then
         let aggMode := (aggFlag.as! String).toLower
-        if aggMode == "module" then
+        if aggMode == "module" || aggMode == "namespace" then
           IO.eprintln "[Unified] Building module-level aggregation..."
           let moduleGraph := ImportGraph.Unified.Aggregation.buildModuleGraph unifiedGraph
 
@@ -153,6 +153,20 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
             | some "dot" =>
               ImportGraph.Unified.Aggregation.writeModuleGraphToDot moduleGraph output
             | _ => pure ()
+
+          if aggMode == "namespace" then
+            IO.eprintln "[Unified] Building namespace-level aggregation..."
+            let nsGraph := ImportGraph.Unified.NamespaceAggregation.buildNamespaceGraph moduleGraph
+            let basePath : String := match args.variableArgsAs! String with
+              | #[] => "graph"
+              | outputs =>
+                let csvOuts := outputs.filter (fun (o : String) =>
+                  (o : FilePath).extension == some "csv")
+                match csvOuts[0]? with
+                | some (p : String) =>
+                  if p.endsWith ".csv" then (p.dropEnd 4).toString else p
+                | none => "graph"
+            ImportGraph.Unified.NamespaceAggregation.writeNamespaceGraph nsGraph basePath
 
       return {}  -- Return empty for GEXF (unified doesn't support GEXF yet)
 
@@ -314,7 +328,7 @@ def graph : Cmd := `[Cli|
     "show-transitive";         "Show transitively redundant edges."
     "mathematical";            "Filter out ubiquitous constants (Eq, rfl, Nat, etc.) to provide a cleaner mathematical map."
     "edge-types" : String;     "For unified mode: comma-separated edge types to include. Valid: extends,field,sig,proof,def,docref. Default: all."
-    "aggregate" : String;      "For unified mode: aggregate to a coarser level. 'module' groups declarations by their source file. Outputs CSV or DOT format."
+    "aggregate" : String;      "For unified mode: aggregate to a coarser level. 'module' groups by source file (CSV or DOT). 'namespace' also adds depth-2 namespace grouping (CSV only)."
     "to" : Array ModuleName;   "Only show the upstream imports of the specified modules."
     "from" : Array ModuleName; "Only show the downstream dependencies of the specified modules."
     "exclude-meta";            "Exclude any files starting with `Mathlib.[Tactic|Lean|Util|Mathport]`."

@@ -35,70 +35,105 @@ public structure ModuleGraph where
   nodes : Std.HashSet Name
   edges : NameMap (Std.HashSet Name)
   edgeCounts : NameMap (NameMap Nat)
+  totalOutEdges : NameMap Nat  -- outgoing decl-edges per module (includes intra)
+  intraEdges : NameMap Nat     -- intra-module decl-edges per module
+  declCounts : NameMap Nat
+  utilization : NameMap (NameMap (Std.HashSet Name))  -- srcMod → tgtMod → referencing decls
 
 /-- Build module-level graph by aggregating declaration dependencies -/
 public def buildModuleGraph (g : UnifiedGraph) : ModuleGraph :=
-  -- Collect all modules
   let nodes : Std.HashSet Name :=
-    g.nodeModules.foldl (fun acc _ modName =>
-      acc.insert modName) {}
+    g.nodeModules.foldl (fun acc _ modName => acc.insert modName) {}
 
-  -- Gather all edges from all edge types
+  let declCounts : NameMap Nat :=
+    g.nodeModules.foldl (fun acc _ modName =>
+      acc.insert modName ((acc.find? modName |>.getD 0) + 1)) {}
+
   let allEdges : List (Name × Name) :=
     (g.extendsEdges.toList.flatMap fun (src, targets) =>
-      targets.toList.map fun tgt => (tgt, src)) ++
+      targets.toList.map fun tgt => (src, tgt)) ++
     (g.fieldEdges.toList.flatMap fun (src, targets) =>
-      targets.toList.map fun tgt => (tgt, src)) ++
+      targets.toList.map fun tgt => (src, tgt)) ++
     (g.signatureEdges.toList.flatMap fun (src, targets) =>
-      targets.toList.map fun tgt => (tgt, src)) ++
+      targets.toList.map fun tgt => (src, tgt)) ++
     (g.proofEdges.toList.flatMap fun (src, targets) =>
-      targets.toList.map fun tgt => (tgt, src)) ++
+      targets.toList.map fun tgt => (src, tgt)) ++
     (g.defEdges.toList.flatMap fun (src, targets) =>
-      targets.toList.map fun tgt => (tgt, src)) ++
+      targets.toList.map fun tgt => (src, tgt)) ++
     (g.docRefEdges.toList.flatMap fun (src, targets) =>
-      targets.toList.map fun tgt => (tgt, src))
+      targets.toList.map fun tgt => (src, tgt))
 
-  -- Aggregate edges and counts
-  let (edges, edgeCounts) :=
-    allEdges.foldl (fun (acc : NameMap (Std.HashSet Name) × NameMap (NameMap Nat)) (edge : Name × Name) =>
-      let (edgeAcc, countAcc) := acc
-      let (sourceDecl, targetDecl) := edge
-      let sourceModule := g.nodeModules.find? sourceDecl |>.getD Name.anonymous
-      let targetModule := g.nodeModules.find? targetDecl |>.getD Name.anonymous
+  let init : NameMap (Std.HashSet Name) × NameMap (NameMap Nat) ×
+             NameMap Nat × NameMap Nat × NameMap (NameMap (Std.HashSet Name)) :=
+    ({}, {}, {}, {}, {})
 
-      if sourceModule != targetModule && sourceModule != Name.anonymous && targetModule != Name.anonymous then
-        -- Add to edges set
-        let currentDeps := edgeAcc.find? sourceModule |>.getD {}
-        let newEdgeAcc := edgeAcc.insert sourceModule (currentDeps.insert targetModule)
-
-        -- Count edges between these modules
-        let currentCounts := countAcc.find? sourceModule |>.getD {}
-        let count := currentCounts.find? targetModule |>.getD 0
-        let newCounts := currentCounts.insert targetModule (count + 1)
-        let newCountAcc := countAcc.insert sourceModule newCounts
-
-        (newEdgeAcc, newCountAcc)
+  let (edges, edgeCounts, totalOutEdges, intraEdges, utilization) :=
+    allEdges.foldl (fun acc (srcDecl, tgtDecl) =>
+      let (edgeAcc, countAcc, totalAcc, intraAcc, utilAcc) := acc
+      let srcMod := g.nodeModules.find? srcDecl |>.getD Name.anonymous
+      let tgtMod := g.nodeModules.find? tgtDecl |>.getD Name.anonymous
+      if srcMod == Name.anonymous || tgtMod == Name.anonymous then acc
       else
-        (edgeAcc, countAcc)
-    ) ({}, {})
+        let totalAcc' := totalAcc.insert srcMod ((totalAcc.find? srcMod |>.getD 0) + 1)
+        if srcMod == tgtMod then
+          let intraAcc' := intraAcc.insert srcMod ((intraAcc.find? srcMod |>.getD 0) + 1)
+          (edgeAcc, countAcc, totalAcc', intraAcc', utilAcc)
+        else
+          let currentDeps := edgeAcc.find? srcMod |>.getD {}
+          let edgeAcc' := edgeAcc.insert srcMod (currentDeps.insert tgtMod)
+          let currentCounts := countAcc.find? srcMod |>.getD {}
+          let count := currentCounts.find? tgtMod |>.getD 0
+          let countAcc' := countAcc.insert srcMod (currentCounts.insert tgtMod (count + 1))
+          let srcModUtil := utilAcc.find? srcMod |>.getD {}
+          let tgtSet := srcModUtil.find? tgtMod |>.getD {}
+          let utilAcc' := utilAcc.insert srcMod (srcModUtil.insert tgtMod (tgtSet.insert srcDecl))
+          (edgeAcc', countAcc', totalAcc', intraAcc, utilAcc')
+    ) init
 
-  { nodes, edges, edgeCounts }
+  { nodes, edges, edgeCounts, totalOutEdges, intraEdges, declCounts, utilization }
+
+/-- Compute median of a list of floats (returns 0.0 for empty list) -/
+private def median (xs : List Float) : Float :=
+  if xs.isEmpty then 0.0
+  else
+    let sorted := xs.mergeSort (· < ·)
+    let n := sorted.length
+    if n % 2 == 1 then
+      sorted[n / 2]!
+    else
+      (sorted[n / 2 - 1]! + sorted[n / 2]!) / 2.0
+
+private def moduleCohesion (mg : ModuleGraph) (modName : Name) : Float :=
+  let total := mg.totalOutEdges.find? modName |>.getD 0
+  if total == 0 then 0.0
+  else
+    let intra := mg.intraEdges.find? modName |>.getD 0
+    Float.ofNat intra / Float.ofNat total
+
+private def moduleImportUtilizationMedian (mg : ModuleGraph) (modName : Name) : Float :=
+  let srcUtil := mg.utilization.find? modName |>.getD {}
+  let ratios : List Float := srcUtil.toList.filterMap fun (tgtMod, srcDecls) =>
+    let tgtTotal := mg.declCounts.find? tgtMod |>.getD 0
+    if tgtTotal == 0 then none
+    else some (Float.ofNat srcDecls.toList.length / Float.ofNat tgtTotal)
+  median ratios
 
 /-- Write module-level aggregated graph to CSV format -/
 public def writeModuleGraphToCSV (mg : ModuleGraph) (filePath : System.FilePath) : IO Unit := do
   IO.eprintln s!"[Module Aggregation] Writing module graph to {filePath}"
 
-  -- Write nodes CSV
   let fpStr := filePath.toString
   let nodesPath : String := if fpStr.endsWith ".csv"
                             then (fpStr.dropEnd 4).toString ++ "_nodes.csv"
                             else fpStr ++ "_nodes.csv"
 
   let nodesHandle ← IO.FS.Handle.mk nodesPath IO.FS.Mode.write
-  nodesHandle.putStrLn "module"
+  nodesHandle.putStrLn "module,cohesion,import_utilization_median"
   let nodeList : List Name := mg.nodes.toList
-  for module in nodeList do
-    nodesHandle.putStrLn s!"\"{module}\""
+  for modName in nodeList do
+    let cohesion := moduleCohesion mg modName
+    let utilMed := moduleImportUtilizationMedian mg modName
+    nodesHandle.putStrLn s!"\"{modName}\",{cohesion},{utilMed}"
   _ ← nodesHandle.flush
 
   -- Write edges CSV

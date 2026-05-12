@@ -84,6 +84,14 @@ private def buildEdgesJson (name : Name)
 
   edges
 
+private def computeInDegrees (g : UnifiedGraph) : NameMap Nat :=
+  let addTargets (acc : NameMap Nat) (targets : Array Name) : NameMap Nat :=
+    targets.foldl (fun a t => a.insert t ((a.find? t |>.getD 0) + 1)) acc
+  let step (acc : NameMap Nat) (m : NameMap (Array Name)) : NameMap Nat :=
+    m.foldl (fun a _ targets => addTargets a targets) acc
+  step (step (step (step (step (step {} g.extendsEdges) g.fieldEdges)
+    g.signatureEdges) g.proofEdges) g.defEdges) g.docRefEdges
+
 /-- Write unified graph to NDJSON format (newline-delimited JSON) -/
 public def writeUnifiedGraphToNdjson
     (g : UnifiedGraph)
@@ -92,6 +100,7 @@ public def writeUnifiedGraphToNdjson
   IO.eprintln s!"[Unified NDJSON] Writing unified graph to {filePath}"
 
   let handle ← IO.FS.Handle.mk filePath IO.FS.Mode.write
+  let inDegrees := computeInDegrees g
 
   let mut nodeCount := 0
   let mut edgeCount := 0
@@ -99,6 +108,8 @@ public def writeUnifiedGraphToNdjson
   -- Write one JSON object per declaration
   for (name, declType) in g.nodeTypes.toList do
     let modName := (g.nodeModules.find? name |>.getD .anonymous).toString
+    let deg := inDegrees.find? name |>.getD 0
+    let doc := g.nodeDocstrings.find? name |>.getD ""
 
     let edges := buildEdgesJson name g allowedEdgeTypes
     edgeCount := edgeCount + edges.size
@@ -107,6 +118,8 @@ public def writeUnifiedGraphToNdjson
       ("name", Json.str name.toString),
       ("decl_type", Json.str (declTypeToString declType)),
       ("module", Json.str modName),
+      ("in_degree", Json.num deg),
+      ("docstring", Json.str doc),
       ("edges", Json.arr edges)
     ]
 
