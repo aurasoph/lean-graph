@@ -46,17 +46,7 @@ private def extractStructuresFromExpr (env : Environment) (e : Expr) : NameSet :
   let rec walk (expr : Expr) (acc : NameSet) : NameSet :=
     match expr with
     | Expr.const n _ =>
-      -- Capture type-level documented constants in field expressions.
-      -- Includes structures, inductives, and defs (e.g. Set, Exists, Multiset).
-      -- Excludes theorems and constructors: these appear in proof-valued fields
-      -- and dependent type literals (e.g. Bool.true, Nat.succ) but are noise
-      -- for the purpose of understanding a structure's field types.
-      if shouldIncludeConstant env n &&
-         !(env.find? n matches some (.thmInfo _)) &&
-         !(env.find? n matches some (.ctorInfo _)) then
-        acc.insert n
-      else
-        acc
+      if Lean.getStructureInfo? env n |>.isSome then acc.insert n else acc
     | Expr.app f a =>
       walk a (walk f acc)
     | Expr.forallE _ t b _ =>
@@ -66,23 +56,16 @@ private def extractStructuresFromExpr (env : Environment) (e : Expr) : NameSet :
     | _ => acc
   walk e ∅
 
-/--
-Extract field/parameter dependencies from a structure's fields, including inherited ones.
-Uses `getStructureFieldsFlattened` (with `includeSubobjectFields := false`) so that
-parent subobject fields (`toFoo`) are skipped but all leaf fields — own and inherited —
-are visited. Each field's projection function type is walked to find structure references.
--/
 private def getFieldDependencies (env : Environment) (structName : Name) : Array Name := Id.run do
-  let fields := getStructureFieldsFlattened env structName (includeSubobjectFields := false)
-  let mut result : NameSet := {}
-  for fieldName in fields do
-    if let some finfo := getFieldInfo? env structName fieldName then
-      if let some projConstInfo := env.find? finfo.projFn then
-        let deps := extractStructuresFromExpr env projConstInfo.type
-        for dep in deps do
-          if dep != structName then
-            result := result.insert dep
-  return result.toArray
+  let ctorName := structName.append `mk
+  match env.find? ctorName with
+  | none => return #[]
+  | some info =>
+    let fieldStructs := extractStructuresFromExpr env info.type
+    let parents := getParentStructures env structName |>.foldl (init := NameSet.empty) (·.insert ·)
+    let filtered := (fieldStructs.erase structName)
+    let filtered := parents.foldl (init := filtered) (·.erase ·)
+    return filtered.toArray
 
 /--
 Build the structure/typeclass relationship graph, distinguishing between

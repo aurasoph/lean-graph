@@ -22,22 +22,19 @@ open Lean Meta
 
 Shared filtering utilities used across all graph modes.
 
-**Design goal**: a node in the graph corresponds to a declaration that has its own
-entry in the Mathlib/Lean documentation (doc-gen4 visible API). A declaration is
-included if and only if it would appear as a standalone entry in the docs.
+**Design goal**: a dependency edge means "mathematical knowledge required to understand
+or verify this declaration" — not "Lean kernel object referenced by this proof term."
 
-`shouldIncludeConstant` mirrors doc-gen4's `isBlackListed` predicate with one
-deliberate difference:
-
-| Check | doc-gen4 | here |
-| --- | --- | --- |
-| no source range | `findDeclarationRanges? → none` | `isExplicitAPI` |
-| internal names | `isInternal` + `isInternalDetail` | `isInternalDetail` (subsumes `isInternal`) |
-| auxiliary recursors | `isAuxRecursor` | `isAuxRecursor` |
-| noConfusion lemmas | `isNoConfusion` | `isNoConfusion` |
-| raw kernel recursors | `isRec` (checks `.recursor` kind) | `env.find? matches .recInfo` (equivalent) |
-| match-compiler matchers | `isMatcher` (uses `getMatcherInfoCore?`) | `getMatcherInfoCore?` (identical) |
-| projection functions | included (render := false) | included |
+Four filter categories:
+1. **Compiler artifacts** — equation lemmas, match blocks, declarations without a distinct
+   source position. Identified by `isExplicitAPI`.
+2. **Structural plumbing** — auto-generated `A.toB` coercions from `extends`, explicitly
+   named class hierarchy coercions, and all class projection functions (field accessors
+   like `Mul.mul`, `Norm.norm`). Bodies are pure field accesses with no mathematical content.
+3. **Typeclass instances** — filtered pragmatically to avoid noise from instance proof
+   bodies leaking internal lemmas. Use `includeAll := true` to restore.
+4. **Tactic internals** — omega/grind/ring/aesop infrastructure. Filtered principally:
+   no mathematical content to surface underneath these names.
 
 Pass `includeAll := true` to bypass all filtering (debug / exhaustive mode).
 -/
@@ -58,8 +55,53 @@ public def isExplicitAPI (env : Environment) (name : Name) : Bool :=
       match Lean.declRangeExt.find? env prefixName with
       | none => true
       | some parentRanges =>
-        -- Piggyback check: auto-generated children share the parent's selection range.
         ranges.selectionRange.pos != parentRanges.selectionRange.pos
+
+private partial def isTransitiveStructureAncestor
+    (env : Environment) (structName : Name) (targetName : Name)
+    (visited : NameSet := {}) : Bool :=
+  if visited.contains structName then false
+  else
+    match getStructureInfo? env structName with
+    | none => false
+    | some info =>
+      let visited := visited.insert structName
+      info.parentInfo.any fun p =>
+        p.structName == targetName ||
+        isTransitiveStructureAncestor env p.structName targetName visited
+
+private def isClassDeclaration (env : Environment) (structName : Name) : Bool :=
+  match getStructureInfo? env structName with
+  | none => false
+  | some info =>
+    (info.parentInfo.any fun p =>
+      (env.getProjectionFnInfo? p.projFn).any (·.fromClass))
+    ||
+    (info.fieldInfo.any fun f =>
+      (env.getProjectionFnInfo? f.projFn).any (·.fromClass))
+
+/-- Determine if a name is an auto-generated or manually-written structural parent accessor. -/
+private def isStructureParentAccessor (env : Environment) (name : Name) : Bool :=
+  match getStructureInfo? env name.getPrefix with
+  | none => false
+  | some sinfo =>
+    if sinfo.parentInfo.any (fun p => p.projFn == name) then
+      true
+    else
+      let lastComp := name.getString!
+      if lastComp.startsWith "to" && lastComp.length > 2 then
+        let stripped := lastComp.toRawSubstring.drop 2 |>.toString
+        if stripped.startsWith "OfNat" && stripped.any Char.isDigit then
+          (getStructureInfo? env name.getPrefix).isSome
+        else if isClassDeclaration env name.getPrefix then
+          true
+        else
+          let targetName := Name.str Name.anonymous stripped
+          match getStructureInfo? env targetName with
+          | none => false
+          | some _ => isTransitiveStructureAncestor env name.getPrefix targetName
+      else
+        false
 
 /--
 Get the "parent" declaration for a compiler-generated declaration.
@@ -74,10 +116,34 @@ public def getParentDeclaration (env : Environment) (name : Name) : Name :=
   else
     name.getPrefix
 
+/-- Detect if a name is likely a typeclass instance. -/
+public def isLikelyInstance (name : Name) : Bool :=
+  let s := name.toString
+  s.startsWith "inst" || (s.splitOn ".inst").length > 1
+
+/-- Determine if a constant belongs to tactic infrastructure. -/
+public def isTacticInternal (name : Name) : Bool :=
+  (`Lean.Grind).isPrefixOf name ||
+  (`Lean.Omega).isPrefixOf name ||
+  (`Lean.RArray).isPrefixOf name ||
+  (`Lean.Meta).isPrefixOf name ||
+  (`Lean.Elab).isPrefixOf name ||
+  (`Lean.Core).isPrefixOf name ||
+  (`Lean.Server).isPrefixOf name ||
+  (`Lean.Lsp).isPrefixOf name ||
+  (`Int.Linear).isPrefixOf name ||
+  (`Nat.Linear).isPrefixOf name ||
+  (`Nat.ToInt).isPrefixOf name ||
+  (`Mathlib.Tactic).isPrefixOf name ||
+  (`Mathlib.Meta).isPrefixOf name ||
+  (`Std.Internal).isPrefixOf name ||
+  (`Std.Tactic).isPrefixOf name ||
+  (`Std.Sat).isPrefixOf name ||
+  (`Aesop).isPrefixOf name ||
+  (`Qq).isPrefixOf name
+
 /--
 Whether a declaration should appear as a node in the dependency graph.
-Matches doc-gen4's visible API: every node corresponds to a standalone
-documentation entry.
 
 Pass `includeAll := true` to skip all filtering (exhaustive/debug mode).
 -/
@@ -85,17 +151,16 @@ public def shouldIncludeConstant (env : Environment) (name : Name)
     (includeAll : Bool := false) : Bool :=
   if includeAll then true
   else
-    -- isInternalDetail subsumes isInternal: catches _-prefixed components plus
-    -- auto-generated eq_N/proof_N/match_N/omega_N suffixes.
     !name.isInternalDetail &&
     isExplicitAPI env name &&
     !isAuxRecursor env name &&
     !isNoConfusion env name &&
-    -- Raw kernel recursors (.recInfo, e.g. List.rec, Nat.rec).
-    -- isAuxRecursor only catches tagged aux recursors; .recInfo is always excluded.
     !(env.find? name matches some (.recInfo _)) &&
-    -- Match-compiler-generated matchers registered in the matcher extension.
-    !(Lean.Meta.getMatcherInfoCore? env name |>.isSome)
+    !(Lean.Meta.getMatcherInfoCore? env name |>.isSome) &&
+    !isStructureParentAccessor env name &&
+    !isProjectionFn env name &&
+    !isLikelyInstance name &&
+    !isTacticInternal name
 
 /-- Like `shouldIncludeConstant` but additionally excludes inductive types,
 opaque defs, and quotient types from proof dependency graphs (they contribute
@@ -111,11 +176,12 @@ public def shouldIncludeConstantInProofDeps (env : Environment) (name : Name)
 Apply filtering to a dependency list, expanding through excluded nodes to
 recover their mathematical content.
 
-When a dependency is excluded (e.g. a compiler-generated match block or
-equation lemma), we DFS into its body to find the real declarations inside.
+When a dependency is excluded (e.g. a compiler-generated match block), we DFS
+into its body to find the real declarations inside.
 
-Set `isProof := true` when processing proof/definition bodies to use the
-stricter `shouldIncludeConstantInProofDeps` gate.
+Expansion is gated: we do NOT expand through projection functions, structural
+parent accessors, typeclass instances, or tactic internals — these contain no
+mathematical content worth surfacing.
 -/
 public def applyFiltering (env : Environment) (deps : Array Name)
     (includeAll : Bool := false) (isProof : Bool := false) : CoreM (Array Name) := do
@@ -142,15 +208,17 @@ public def applyFiltering (env : Environment) (deps : Array Name)
           result := result.push dep
           resultSeen := resultSeen.insert dep
       else
-        -- Redirect to meaningful parent (e.g. constructor → inductive)
         let parent := getParentDeclaration env dep
         if parent != dep && env.contains parent then
           if shouldInclude parent && !resultSeen.contains parent then
             result := result.push parent
             resultSeen := resultSeen.insert parent
 
-        -- Expand through compiler-generated nodes to find real content.
-        if isProof then
+        if isProof &&
+           !isProjectionFn env dep &&
+           !isStructureParentAccessor env dep &&
+           !isLikelyInstance dep &&
+           !isTacticInternal dep then
           if let some info := env.find? dep then
             let subDeps := match info with
               | .thmInfo val  => val.value.getUsedConstants
