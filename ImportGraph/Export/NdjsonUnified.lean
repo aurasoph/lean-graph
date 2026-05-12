@@ -54,18 +54,27 @@ private def edgeKindToString (et : EdgeType) : String :=
 private def declTypeToString (dt : DeclarationType) : String :=
   dt.label
 
-/-- Convert edges of a specific type to JSON objects -/
 private def edgesToJson (edgeMap : NameMap (Array Name)) (kind : String) (name : Name) :
     Array Json :=
   match edgeMap.find? name with
   | none => #[]
   | some targets => targets.map fun target =>
+      Json.mkObj [("target", Json.str target.toString), ("kind", Json.str kind)]
+
+private def sigEdgesToJson (edgeMap : NameMap (Array (Name × SigEdgeMeta))) (name : Name) :
+    Array Json :=
+  match edgeMap.find? name with
+  | none => #[]
+  | some targets => targets.map fun (target, em) =>
       Json.mkObj [
-        ("target", Json.str target.toString),
-        ("kind", Json.str kind)
+        ("target",   Json.str target.toString),
+        ("kind",     Json.str "sig"),
+        ("position", Json.str em.position.label),
+        ("binder",   Json.str em.binderKind.label),
+        ("role",     Json.str em.appRole.label),
+        ("via_proj", Json.bool em.viaProj)
       ]
 
-/-- Build JSON array of edges for a given node -/
 private def buildEdgesJson (name : Name)
     (g : UnifiedGraph) (allowedEdgeTypes : Option (Std.HashSet String)) :
     Array Json :=
@@ -74,22 +83,23 @@ private def buildEdgesJson (name : Name)
     | none => true
     | some s => s.contains label
 
-  let edges : Array Json :=
-    (if allow "extends" then edgesToJson g.extendsEdges "extends" name else #[]) ++
-    (if allow "field" then edgesToJson g.fieldEdges "field" name else #[]) ++
-    (if allow "sig" then edgesToJson g.signatureEdges "sig" name else #[]) ++
-    (if allow "proof" then edgesToJson g.proofEdges "proof" name else #[]) ++
-    (if allow "def" then edgesToJson g.defEdges "def" name else #[]) ++
-    (if allow "docref" then edgesToJson g.docRefEdges "docref" name else #[])
-
-  edges
+  (if allow "extends" then edgesToJson g.extendsEdges "extends" name else #[]) ++
+  (if allow "field"   then edgesToJson g.fieldEdges   "field"   name else #[]) ++
+  (if allow "sig"     then sigEdgesToJson g.signatureEdges       name else #[]) ++
+  (if allow "proof"   then edgesToJson g.proofEdges   "proof"   name else #[]) ++
+  (if allow "def"     then edgesToJson g.defEdges     "def"     name else #[]) ++
+  (if allow "docref"  then edgesToJson g.docRefEdges  "docref"  name else #[])
 
 private def computeInDegrees (g : UnifiedGraph) : NameMap Nat :=
   let addTargets (acc : NameMap Nat) (targets : Array Name) : NameMap Nat :=
     targets.foldl (fun a t => a.insert t ((a.find? t |>.getD 0) + 1)) acc
+  let addSigTargets (acc : NameMap Nat) (targets : Array (Name × SigEdgeMeta)) : NameMap Nat :=
+    targets.foldl (fun a (t, _) => a.insert t ((a.find? t |>.getD 0) + 1)) acc
   let step (acc : NameMap Nat) (m : NameMap (Array Name)) : NameMap Nat :=
     m.foldl (fun a _ targets => addTargets a targets) acc
-  step (step (step (step (step (step {} g.extendsEdges) g.fieldEdges)
+  let stepSig (acc : NameMap Nat) (m : NameMap (Array (Name × SigEdgeMeta))) : NameMap Nat :=
+    m.foldl (fun a _ targets => addSigTargets a targets) acc
+  step (step (step (stepSig (step (step {} g.extendsEdges) g.fieldEdges)
     g.signatureEdges) g.proofEdges) g.defEdges) g.docRefEdges
 
 /-- Write unified graph to NDJSON format (newline-delimited JSON) -/

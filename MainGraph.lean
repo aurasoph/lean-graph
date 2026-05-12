@@ -77,7 +77,8 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
         | "type-deps" | "blueprint" =>
           let ctx := { options := {}, fileName := "<input>", fileMap := default }
           let state := { env }
-          let g ← Prod.fst <$> (CoreM.toIO (env.typeDepsGraph includeAll) ctx state)
+          let gRich ← Prod.fst <$> (CoreM.toIO (env.typeDepsGraph includeAll) ctx state)
+          let g : NameMap (Array Name) := gRich.foldl (fun acc n deps => acc.insert n (deps.map Prod.fst)) {}
           pure (g, true, false)
         | "proof-deps" | "logic" =>
           let ctx := { options := {}, fileName := "<input>", fileMap := default }

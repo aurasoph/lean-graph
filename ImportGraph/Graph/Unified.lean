@@ -68,6 +68,12 @@ def nodesFromMap (graph : NameMap (Array Name)) : NameSet :=
     deps.foldl (fun acc dep => acc.insert dep) acc
   ) ∅
 
+def nodesFromSigMap (graph : NameMap (Array (Name × SigEdgeMeta))) : NameSet :=
+  graph.foldl (fun acc name deps =>
+    let acc := acc.insert name
+    deps.foldl (fun acc (dep, _) => acc.insert dep) acc
+  ) ∅
+
 /-- Pre-computed symbol context for efficient phase separation -/
 private structure SymbolContext where
   includedSymbols  : NameSet
@@ -251,7 +257,7 @@ public def unifiedGraph (env : Environment) (includeAll : Bool := false) : CoreM
   IO.eprintln "[Unified] Merging nodes..."
   let mut allNodes := nodesFromMap structures.extendsEdges
   allNodes := (nodesFromMap structures.fieldEdges).foldl (·.insert ·) allNodes
-  allNodes := (nodesFromMap typeDepsGraph).foldl (·.insert ·) allNodes
+  allNodes := (nodesFromSigMap typeDepsGraph).foldl (·.insert ·) allNodes
   allNodes := (nodesFromMap proofEdges).foldl (·.insert ·) allNodes
   allNodes := (nodesFromMap defEdges).foldl (·.insert ·) allNodes
   allNodes := (nodesFromMap docRefEdges).foldl (·.insert ·) allNodes
@@ -293,16 +299,17 @@ public def unifiedGraph (env : Environment) (includeAll : Bool := false) : CoreM
 
 public def UnifiedGraph.totalEdgeCount (g : UnifiedGraph) : Nat :=
   let count (m : NameMap (Array Name)) := m.foldl (fun acc _ deps => acc + deps.size) 0
-  count g.extendsEdges + count g.fieldEdges + count g.signatureEdges +
+  let countSig (m : NameMap (Array (Name × SigEdgeMeta))) := m.foldl (fun acc _ deps => acc + deps.size) 0
+  count g.extendsEdges + count g.fieldEdges + countSig g.signatureEdges +
   count g.proofEdges + count g.defEdges + count g.docRefEdges
 
-/-- Get edge count for a specific edge type -/
 public def UnifiedGraph.edgeCountByType (g : UnifiedGraph) (et : EdgeType) : Nat :=
   let count (m : NameMap (Array Name)) := m.foldl (fun acc _ deps => acc + deps.size) 0
+  let countSig (m : NameMap (Array (Name × SigEdgeMeta))) := m.foldl (fun acc _ deps => acc + deps.size) 0
   match et with
   | .extends => count g.extendsEdges
   | .field => count g.fieldEdges
-  | .signatureType => count g.signatureEdges
+  | .signatureType => countSig g.signatureEdges
   | .proofCall => count g.proofEdges
   | .defCall => count g.defEdges
   | .docRef => count g.docRefEdges

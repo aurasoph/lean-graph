@@ -133,6 +133,46 @@ public def DeclarationType.label : DeclarationType → String
   | .axiom => "axiom"
   | .other => "other"
 
+public inductive SigPosition where | hyp | conclusion
+  deriving Inhabited, BEq, Repr
+
+public inductive AppRole where | fn | arg
+  deriving Inhabited, BEq, Repr
+
+/-- Mirror of Lean.BinderInfo; avoids importing Lean.Expr from Types.lean. -/
+public inductive BinderKind where
+  | explicit | implicit | strictImplicit | instImplicit
+  deriving Inhabited, BEq, Repr
+
+public def SigPosition.label : SigPosition → String | .hyp => "hyp" | .conclusion => "conclusion"
+public def AppRole.label : AppRole → String | .fn => "fn" | .arg => "arg"
+public def BinderKind.label : BinderKind → String
+  | .explicit => "explicit" | .implicit => "implicit"
+  | .strictImplicit => "strict" | .instImplicit => "inst"
+
+/-- Metadata for a signature-level dependency edge. -/
+public structure SigEdgeMeta where
+  position   : SigPosition
+  binderKind : BinderKind
+  appRole    : AppRole
+  viaProj    : Bool
+  deriving Inhabited, BEq, Repr
+
+/-- Numeric priority: higher = more informative for informalization.
+    conclusion > hyp+explicit > hyp+inst > hyp+implicit > hyp+strict;
+    fn > arg at each level; viaProj is OR'd separately. -/
+public def SigEdgeMeta.priority (m : SigEdgeMeta) : Nat :=
+  match m.position with
+  | .conclusion => 10 + match m.appRole with | .fn => 1 | .arg => 0
+  | .hyp =>
+    let bi := match m.binderKind with
+      | .explicit => 6 | .instImplicit => 4 | .implicit => 2 | .strictImplicit => 0
+    bi + match m.appRole with | .fn => 1 | .arg => 0
+
+public def SigEdgeMeta.merge (a b : SigEdgeMeta) : SigEdgeMeta :=
+  let winner := if a.priority >= b.priority then a else b
+  { winner with viaProj := a.viaProj || b.viaProj }
+
 /-- Unified graph structure combining all dependency types -/
 public structure UnifiedGraph where
   nodes : NameSet
@@ -141,7 +181,7 @@ public structure UnifiedGraph where
   nodeDocstrings : NameMap String  -- name → docstring (omitted if none)
   extendsEdges : NameMap (Array Name)
   fieldEdges : NameMap (Array Name)
-  signatureEdges : NameMap (Array Name)
+  signatureEdges : NameMap (Array (Name × SigEdgeMeta))
   proofEdges : NameMap (Array Name)
   defEdges : NameMap (Array Name)
   docRefEdges : NameMap (Array Name)

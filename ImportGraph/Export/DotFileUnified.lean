@@ -26,9 +26,13 @@ namespace ImportGraph.Unified.Export
 private def computeInDegrees (g : UnifiedGraph) : NameMap Nat :=
   let addTargets (acc : NameMap Nat) (targets : Array Name) : NameMap Nat :=
     targets.foldl (fun a t => a.insert t ((a.find? t |>.getD 0) + 1)) acc
+  let addSigTargets (acc : NameMap Nat) (targets : Array (Name × SigEdgeMeta)) : NameMap Nat :=
+    targets.foldl (fun a (t, _) => a.insert t ((a.find? t |>.getD 0) + 1)) acc
   let step (acc : NameMap Nat) (m : NameMap (Array Name)) : NameMap Nat :=
     m.foldl (fun a _ targets => addTargets a targets) acc
-  step (step (step (step (step (step {} g.extendsEdges) g.fieldEdges)
+  let stepSig (acc : NameMap Nat) (m : NameMap (Array (Name × SigEdgeMeta))) : NameMap Nat :=
+    m.foldl (fun a _ targets => addSigTargets a targets) acc
+  step (step (step (stepSig (step (step {} g.extendsEdges) g.fieldEdges)
     g.signatureEdges) g.proofEdges) g.defEdges) g.docRefEdges
 
 private def csvEscape (s : String) : String :=
@@ -61,7 +65,7 @@ public def writeUnifiedGraphToFile
   -- Write companion nodes CSV alongside the DOT file
   let dotStr := filePath.toString
   let csvStr := if dotStr.endsWith ".dot"
-                then (dotStr.take (dotStr.length - 4)).toString ++ "_nodes.csv"
+                then (dotStr.dropEnd 4).toString ++ "_nodes.csv"
                 else dotStr ++ "_nodes.csv"
   writeNodesCSV g csvStr
 
@@ -93,8 +97,9 @@ public def writeUnifiedGraphToFile
   if allow "sig" then
     IO.eprintln "[Unified DOT] Writing signature edges..."
     for (source, targets) in g.signatureEdges.toList do
-      for target in targets do
-        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [kind=sig];"
+      for (target, em) in targets do
+        let attrs := s!"kind=sig, pos={em.position.label}, bi={em.binderKind.label}, role={em.appRole.label}"
+        handle.putStrLn s!"  \"{target}\" -> \"{source}\" [{attrs}];"
 
   -- Write proof edges
   if allow "proof" then
