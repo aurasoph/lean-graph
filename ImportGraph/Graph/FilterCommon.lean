@@ -135,6 +135,7 @@ public def isTacticInternal (name : Name) : Bool :=
   (`Nat.Linear).isPrefixOf name ||
   (`Nat.ToInt).isPrefixOf name ||
   (`Mathlib.Tactic).isPrefixOf name ||
+  (`Mathlib.TacticAnalysis).isPrefixOf name ||
   (`Mathlib.Meta).isPrefixOf name ||
   (`Std.Internal).isPrefixOf name ||
   (`Std.Tactic).isPrefixOf name ||
