@@ -33,7 +33,57 @@ Combines all 6 edge types into one queryable database:
 | `def` | Definition invocations |
 | `docref` | Docstring references |
 
-By default, you get ~46k declarations (human-written code only). With `--include-aux`, you get all ~308k declarations including compiler machinery.
+By default, you get ~321k declarations (human-written code only). With `--include-aux`, you get all declarations including compiler machinery.
+
+### Node schema (NDJSON)
+
+Each line of the NDJSON file is one JSON object:
+
+```json
+{
+  "name":        "Finset.sum",
+  "decl_type":   "def",
+  "module":      "Mathlib.Algebra.BigOperators.Group.Finset",
+  "in_degree":   4201,
+  "is_instance": false,
+  "docstring":   "The sum of `f x` as `x` ranges over `s`.",
+  "edges":       [ ... ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Fully qualified Lean declaration name |
+| `decl_type` | string | `def`, `thm`, `inst`, `axiom`, `opaque`, `inductive`, `structure`, `class` |
+| `module` | string | Lean module the declaration is defined in |
+| `in_degree` | int | Number of other declarations that reference this one |
+| `is_instance` | bool | Whether the declaration is a registered typeclass instance |
+| `docstring` | string | Docstring text, or empty string |
+| `edges` | array | Outgoing dependency edges (see below) |
+
+### Edge schema
+
+Each entry in the `edges` array:
+
+```json
+{
+  "target":   "Finset",
+  "kind":     "sig",
+  "position": "hyp",
+  "binder":   "explicit",
+  "role":     "fn",
+  "via_proj": false
+}
+```
+
+| Field | Present on | Values | Description |
+|-------|-----------|--------|-------------|
+| `target` | all | string | Name of the dependency |
+| `kind` | all | `sig` `proof` `def` `extends` `field` `docref` | Relationship type |
+| `position` | `sig` | `hyp` `conclusion` | Whether the dep appears in a hypothesis or the return type |
+| `binder` | `sig`/`hyp` | `explicit` `implicit` `inst` `strict` | How the argument is bound |
+| `role` | `sig` | `fn` `arg` | Whether the dep is in function or argument position |
+| `via_proj` | `sig` | bool | Whether the dep is accessed via a field projection |
 
 See [FILTERING.md](FILTERING.md) for detailed guidance on which mode to use.
 
