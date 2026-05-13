@@ -43,12 +43,13 @@ private def writeNodesCSV (g : UnifiedGraph) (csvPath : String) : IO Unit := do
   IO.eprintln s!"[Unified] Writing nodes CSV to {csvPath}"
   let csv ← IO.FS.Handle.mk ⟨csvPath⟩ IO.FS.Mode.write
   let inDegrees := computeInDegrees g
-  csv.putStrLn "name,decl_type,module,in_degree,docstring"
+  csv.putStrLn "name,decl_type,module,in_degree,is_instance,docstring"
   for (name, declType) in g.nodeTypes.toList do
     let modName := (g.nodeModules.find? name |>.getD .anonymous).toString
     let deg := inDegrees.find? name |>.getD 0
+    let isInst := if g.nodeInstances.contains name then "true" else "false"
     let doc := csvEscape (g.nodeDocstrings.find? name |>.getD "")
-    csv.putStrLn s!"\"{name}\",\"{declType.label}\",\"{modName}\",{deg},\"{doc}\""
+    csv.putStrLn s!"\"{name}\",\"{declType.label}\",\"{modName}\",{deg},{isInst},\"{doc}\""
 
 /-- Write unified graph to DOT format with categorized edges -/
 public def writeUnifiedGraphToFile

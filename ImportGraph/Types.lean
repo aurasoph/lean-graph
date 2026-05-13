@@ -179,6 +179,7 @@ public structure UnifiedGraph where
   nodeTypes : NameMap DeclarationType
   nodeModules : NameMap Name  -- name → defining Lean module
   nodeDocstrings : NameMap String  -- name → docstring (omitted if none)
+  nodeInstances : NameSet  -- names that are typeclass instances (via isInstanceCore)
   extendsEdges : NameMap (Array Name)
   fieldEdges : NameMap (Array Name)
   signatureEdges : NameMap (Array (Name × SigEdgeMeta))

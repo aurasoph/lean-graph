@@ -162,7 +162,6 @@ public def shouldIncludeConstant (env : Environment) (name : Name)
     !isStructureParentAccessor env name &&
     !isProjectionFn env name &&
     !isLikelyInstance name &&
-    !isInstanceCore env name &&
     !isTacticInternal name
 
 /-- Like `shouldIncludeConstant` but additionally excludes inductive types,
@@ -221,7 +220,6 @@ public def applyFiltering (env : Environment) (deps : Array Name)
            !isProjectionFn env dep &&
            !isStructureParentAccessor env dep &&
            !isLikelyInstance dep &&
-           !isInstanceCore env dep &&
            !isTacticInternal dep then
           if let some info := env.find? dep then
             let subDeps := match info with
