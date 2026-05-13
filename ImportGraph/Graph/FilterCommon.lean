@@ -116,7 +116,8 @@ public def getParentDeclaration (env : Environment) (name : Name) : Name :=
   else
     name.getPrefix
 
-/-- Detect if a name is likely a typeclass instance. -/
+/-- Detect if a name follows the anonymous-instance naming convention (`inst*` or `.inst*`).
+Used as a fast pre-filter; named instances are caught by `isInstanceCore`. -/
 public def isLikelyInstance (name : Name) : Bool :=
   let s := name.toString
   s.startsWith "inst" || (s.splitOn ".inst").length > 1
@@ -161,6 +162,7 @@ public def shouldIncludeConstant (env : Environment) (name : Name)
     !isStructureParentAccessor env name &&
     !isProjectionFn env name &&
     !isLikelyInstance name &&
+    !isInstanceCore env name &&
     !isTacticInternal name
 
 /-- Like `shouldIncludeConstant` but additionally excludes inductive types,
@@ -219,6 +221,7 @@ public def applyFiltering (env : Environment) (deps : Array Name)
            !isProjectionFn env dep &&
            !isStructureParentAccessor env dep &&
            !isLikelyInstance dep &&
+           !isInstanceCore env dep &&
            !isTacticInternal dep then
           if let some info := env.find? dep then
             let subDeps := match info with

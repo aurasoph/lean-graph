@@ -64,7 +64,8 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
   let includeAll := args.hasFlag "include-aux"
 
   unsafe Lean.enableInitializersExecution
-  let outFiles ← try unsafe withImportModules (to.map ({module := ·})) {} (trustLevel := 1024) fun env => do
+  let env ← importModules (to.map ({module := ·})) {} (trustLevel := 1024) (loadExts := true)
+  let outFiles ← try (do
     let toModule := ImportGraph.getModule to[0]!
 
     -- Select graph mode based on --mode flag
@@ -264,6 +265,7 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
       outFiles := outFiles.insert "gexf" gexfFile
     
     return outFiles
+  )
 
   catch err =>
     -- TODO: try to build `to` first, so this doesn't happen
