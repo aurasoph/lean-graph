@@ -1,12 +1,44 @@
-# Filtering Design
+# Filtering Guide
+
+By default, the tool only shows human-written, documented code. You can also get the full graph including compiler machinery and internal details.
+
+## Default Mode (Recommended)
+
+```bash
+lake exe graph --to Mathlib --mode unified output.dot
+```
+
+~46k declarations, ~1.1M edges. Matches the Mathlib documentation exactly — if a declaration appears in the docs, it appears in the graph.
+
+Filters out:
+- Auto-generated junk (`eq_N`, `proof_N`, `match_N`, etc.)
+- Internal/private stuff (prefixed with `_private` or `_`)
+- Compiler machinery (recursors, `noConfusion`, matchers)
+
+## Exhaustive Mode (`--include-aux`)
+
+```bash
+lake exe graph --to Mathlib --mode unified --include-aux output.dot
+```
+
+~308k declarations, ~8.4M edges. Everything: auto-generated, internal, machinery, compiler artifacts. Use for full refactoring, compliance audits, or understanding how Lean generates code.
+
+## Quick Comparison
+
+|              | Default | Exhaustive |
+|--------------|---------|-----------|
+| **Nodes**    | 46k     | 308k (6.7x) |
+| **Edges**    | 1.1M    | 8.4M (7.6x) |
+| **Speed**    | ~5-10 min | ~30-60 min |
+| **Use for**  | Analysis | Full refactoring, audits |
+
+---
 
 ## Core Principle
 
-Every node in the graph corresponds to a declaration that has a **standalone entry in the Mathlib documentation** (doc-gen4). A declaration is included if and only if it would appear as its own page or anchor in the docs.
+Every node in the default-mode graph corresponds to a declaration that has a **standalone entry in the Mathlib documentation** (doc-gen4). A declaration is included if and only if it would appear as its own page or anchor in the docs.
 
 This means the graph and the docs are in 1:1 correspondence: if you can look it up in Mathlib docs, it is a node. If it doesn't have a docs entry, it is not a node.
-
----
 
 ## The Filter
 
@@ -26,27 +58,23 @@ A declaration is included when all of these hold:
 
 Everything else is included: typeclass instances, projection functions, tactic-layer declarations, opaque definitions, axioms, structures, classes, constructors.
 
-Pass `--include-aux` to bypass all filtering (exhaustive/debug mode).
+Pass `--include-aux` to bypass all filtering.
 
----
-
-## What This Matches
+## Parity with doc-gen4
 
 This filter mirrors doc-gen4's `isBlackListed` predicate precisely:
 
-| Check | doc-gen4 | here |
-| --- | --- | --- |
-| no source range | `findDeclarationRanges? → none` | `isExplicitAPI` |
-| internal names | `isInternal` + `isInternalDetail` | `isInternalDetail` (subsumes `isInternal`) |
-| auxiliary recursors | `isAuxRecursor` | `isAuxRecursor` |
-| noConfusion lemmas | `isNoConfusion` | `isNoConfusion` |
-| raw kernel recursors | `isRec` (checks `.recursor` kind) | `env.find? matches .recInfo` (equivalent) |
-| match-compiler matchers | `isMatcher` | `getMatcherInfoCore?` (identical) |
-| projection functions | included (render := false) | **included** |
+| Check                  | doc-gen4                              | here                                       |
+|------------------------|---------------------------------------|--------------------------------------------|
+| no source range        | `findDeclarationRanges? → none`       | `isExplicitAPI`                            |
+| internal names         | `isInternal` + `isInternalDetail`     | `isInternalDetail` (subsumes `isInternal`) |
+| auxiliary recursors    | `isAuxRecursor`                       | `isAuxRecursor`                            |
+| noConfusion lemmas     | `isNoConfusion`                       | `isNoConfusion`                            |
+| raw kernel recursors   | `isRec` (checks `.recursor` kind)     | `env.find?` matches `.recInfo` (equivalent) |
+| match-compiler matchers| `isMatcher`                           | `getMatcherInfoCore?` (identical)          |
+| projection functions   | included (`render := false`)          | **included**                               |
 
-Projection functions (field accessors like `Mul.mul`, `Norm.norm`) appear in the Mathlib docs with linkable anchors on their parent structure's page (`render := false` in doc-gen4). They are included as nodes in the graph for the same reason.
-
----
+Projection functions (field accessors like `Mul.mul`, `Norm.norm`) appear in the Mathlib docs with linkable anchors on their parent structure's page. They are included as nodes in the graph for the same reason.
 
 ## Expansion in Proof Dependencies
 
@@ -54,21 +82,43 @@ When building proof dependency edges, the filter is applied with a DFS expansion
 
 This expansion only applies to excluded declarations. Included declarations (everything that passes the filter above) are added as nodes directly without expansion.
 
----
-
 ## Edge Types
 
 The unified graph records six kinds of dependency:
 
-| Kind (DB) | DOT label | Description |
-|-----------|-----------|-------------|
-| `extends` | `extends` | Structure/class inheritance (`A extends B`) |
-| `field` | `field` | Composition via field/parameter — own **and inherited** fields |
-| `signature` | `sig` | Type appearing in a declaration's signature |
-| `proof` | `proof` | Theorem invoking another theorem/lemma in its proof body |
-| `def` | `def` | Definition invoking another declaration in its body |
-| `docref` | `docref` | Backtick reference (`` `Name ``) in a docstring |
+| Kind        | Description |
+|-------------|-------------|
+| `extends`   | Structure/class inheritance (`A extends B`) |
+| `field`     | Composition via field/parameter — own **and inherited** fields |
+| `sig`       | Type appearing in a declaration's signature |
+| `proof`     | Theorem invoking another theorem/lemma in its proof body |
+| `def`       | Definition invoking another declaration in its body |
+| `docref`    | Backtick reference (`` `Name ``) in a docstring |
 
 `docref` edges are textual — they record which declarations are mentioned by name in documentation. Doc-gen4 turns these same references into hyperlinks; the graph turns them into edges.
 
 Field edges include both directly-declared fields and fields inherited from parent structures. If `B extends A` and `A` has a field of type `T`, then `B` carries a `field` edge to `T` directly, in addition to the `extends` edge to `A`.
+
+Exhaustive mode (`--include-aux`) doesn't distinguish edge types — it lumps everything together.
+
+## Examples
+
+**Just proof and signature deps:**
+```bash
+lake exe graph --to Mathlib --mode unified --edge-types proof,sig output.dot
+```
+
+**Full graph for refactoring:**
+```bash
+lake exe graph --to Mathlib --mode unified --include-aux output.dot
+```
+
+**NDJSON for large graphs (DOT gets huge):**
+```bash
+lake exe graph --to Mathlib --mode unified --include-aux output.ndjson
+```
+
+**Module-level aggregation:**
+```bash
+lake exe graph --to Mathlib --mode unified --aggregate module output.dot
+```

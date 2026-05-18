@@ -85,7 +85,7 @@ Each entry in the `edges` array:
 | `role` | `sig` | `fn` `arg` | Whether the dep is in function or argument position |
 | `via_proj` | `sig` | bool | Whether the dep is accessed via a field projection |
 
-See [FILTERING.md](FILTERING.md) for detailed guidance on which mode to use.
+See [FILTERING.md](docs/FILTERING.md) for detailed guidance on which mode to use.
 
 ## Regenerating the Unified Graph
 
@@ -162,7 +162,7 @@ For data analysis, use NDJSON format:
 lake exe graph --mode unified --to Mathlib output.ndjson
 ```
 
-See [FILTERING.md](FILTERING.md) and `lake exe graph --help` for all options.
+See [FILTERING.md](docs/FILTERING.md) and `lake exe graph --help` for all options.
 
 ## License
 

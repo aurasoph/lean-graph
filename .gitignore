@@ -10,9 +10,15 @@
 *.log
 *.csv
 *.txt
---help
---include-*
---mode
+
+# Archived graph outputs (large, not tracked)
+archive/
+
+# Claude Code harness
+.claude/
+
+# Local scripts (not tracked yet)
+scripts/
 
 # Temporary analysis
 scratch/
