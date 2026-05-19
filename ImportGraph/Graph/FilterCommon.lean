@@ -106,15 +106,28 @@ private def isStructureParentAccessor (env : Environment) (name : Name) : Bool :
 /--
 Get the "parent" declaration for a compiler-generated declaration.
 Used to surface the meaningful parent when expanding through filtered nodes.
+
+The non-ctor / non-rec fallback only returns `name.getPrefix` when the prefix
+shares a source-selection position with `name` — meaning the two came from the
+same human-written declaration (e.g., `Foo._proof_3` shares its position with
+`Foo`). When the source positions differ (or are absent), returns `name`
+itself, which signals to the caller to skip the parent edge entirely. This
+prevents phantom edges produced by stripping `.X` off a filtered structure
+name when the resulting prefix happens to be an unrelated constant.
 -/
 public def getParentDeclaration (env : Environment) (name : Name) : Name :=
   if let some info := env.find? name then
     match info with
     | .ctorInfo val => val.induct
     | .recInfo val => val.name.getPrefix
-    | _ => name.getPrefix
+    | _ =>
+      let parent := name.getPrefix
+      match Lean.declRangeExt.find? env name, Lean.declRangeExt.find? env parent with
+      | some r1, some r2 =>
+        if r1.selectionRange.pos == r2.selectionRange.pos then parent else name
+      | _, _ => name
   else
-    name.getPrefix
+    name
 
 /-- Detect if a name follows the anonymous-instance naming convention (`inst*` or `.inst*`).
 Used as a fast pre-filter; named instances are caught by `isInstanceCore`. -/
