@@ -8,23 +8,23 @@ Authors: Kim Morrison, Paul Lezeau, Evan Wang
 module
 
 public import Cli.Basic
-import ImportGraph.Export.DotFile
-import ImportGraph.Export.Gexf
-import ImportGraph.Export.DotFileUnified
-import ImportGraph.Export.NdjsonUnified
-import ImportGraph.Export.ModuleAggregation
-import ImportGraph.Export.NamespaceAggregation
-import ImportGraph.Graph.Filter
-import ImportGraph.Graph.TransitiveClosure
-import ImportGraph.Graph.TypeDeps
-import ImportGraph.Graph.ProofDeps
-import ImportGraph.Graph.Structures
-import ImportGraph.Graph.Unified
-import ImportGraph.Imports.ImportGraph
-import ImportGraph.Imports.RequiredModules
-import ImportGraph.Lean.Name
-import ImportGraph.Util.CurrentModule
-import ImportGraph.Util.FindSorry
+import LeanGraph.Export.DotFile
+import LeanGraph.Export.Gexf
+import LeanGraph.Export.DotFileUnified
+import LeanGraph.Export.NdjsonUnified
+import LeanGraph.Export.ModuleAggregation
+import LeanGraph.Export.NamespaceAggregation
+import LeanGraph.Graph.Filter
+import LeanGraph.Graph.TransitiveClosure
+import LeanGraph.Graph.TypeDeps
+import LeanGraph.Graph.ProofDeps
+import LeanGraph.Graph.Structures
+import LeanGraph.Graph.Unified
+import LeanGraph.Imports.LeanGraph
+import LeanGraph.Imports.RequiredModules
+import LeanGraph.Lean.Name
+import LeanGraph.Util.CurrentModule
+import LeanGraph.Util.FindSorry
 import Lean.Data.NameMap.AdditionalOperations
 
 /-!
@@ -35,7 +35,7 @@ This is a replacement for Lean 3's `leanproject import-graph` tool.
 
 open Cli
 
-open Lean Core System ImportGraph
+open Lean Core System LeanGraph
 
 open IO.FS IO.Process Name in
 /-- Implementation of the import graph command line program. -/
@@ -66,7 +66,7 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
   unsafe Lean.enableInitializersExecution
   let env ← importModules (to.map ({module := ·})) {} (trustLevel := 1024) (loadExts := true)
   let outFiles ← try (do
-    let toModule := ImportGraph.getModule to[0]!
+    let toModule := LeanGraph.getModule to[0]!
 
     -- Select graph mode based on --mode flag
     let (graphInit, isConstantLevel, isUnifiedMode) ← match args.flag? "mode" with
@@ -101,7 +101,7 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
     if isUnifiedMode then
       let ctx := { options := {}, fileName := "<input>", fileMap := default }
       let state := { env }
-      let unifiedGraph ← Prod.fst <$> (CoreM.toIO (ImportGraph.Unified.unifiedGraph env includeAll) ctx state)
+      let unifiedGraph ← Prod.fst <$> (CoreM.toIO (LeanGraph.Unified.unifiedGraph env includeAll) ctx state)
 
       -- Parse --edge-types flag
       let allowedEdgeTypes : Option (Std.HashSet String) :=
@@ -120,7 +120,7 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
               | none | some "dot" => true
               | _ => false)
         for output in dotOutputs do
-          ImportGraph.Unified.Export.writeUnifiedGraphToFile unifiedGraph output allowedEdgeTypes
+          LeanGraph.Unified.Export.writeUnifiedGraphToFile unifiedGraph output allowedEdgeTypes
 
       -- Write unified NDJSON file
       if extensions.contains "ndjson" then
@@ -131,13 +131,13 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
               | some "ndjson" => true
               | _ => false)
         for output in ndjsonOutputs do
-          ImportGraph.Unified.Export.writeUnifiedGraphToNdjson unifiedGraph output allowedEdgeTypes
+          LeanGraph.Unified.Export.writeUnifiedGraphToNdjson unifiedGraph output allowedEdgeTypes
 
       if let some aggFlag := args.flag? "aggregate" then
         let aggMode := (aggFlag.as! String).toLower
         if aggMode == "module" || aggMode == "namespace" then
           IO.eprintln "[Unified] Building module-level aggregation..."
-          let moduleGraph := ImportGraph.Unified.Aggregation.buildModuleGraph unifiedGraph
+          let moduleGraph := LeanGraph.Unified.Aggregation.buildModuleGraph unifiedGraph
 
           -- Output module graph in requested formats
           let outputs := match args.variableArgsAs! String with
@@ -151,14 +151,14 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
           for output in outputs do
             match (output : FilePath).extension with
             | some "csv" =>
-              ImportGraph.Unified.Aggregation.writeModuleGraphToCSV moduleGraph output
+              LeanGraph.Unified.Aggregation.writeModuleGraphToCSV moduleGraph output
             | some "dot" =>
-              ImportGraph.Unified.Aggregation.writeModuleGraphToDot moduleGraph output
+              LeanGraph.Unified.Aggregation.writeModuleGraphToDot moduleGraph output
             | _ => pure ()
 
           if aggMode == "namespace" then
             IO.eprintln "[Unified] Building namespace-level aggregation..."
-            let nsGraph := ImportGraph.Unified.NamespaceAggregation.buildNamespaceGraph moduleGraph
+            let nsGraph := LeanGraph.Unified.NamespaceAggregation.buildNamespaceGraph moduleGraph
             let basePath : String := match args.variableArgsAs! String with
               | #[] => "graph"
               | outputs =>
@@ -168,7 +168,7 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
                 | some (p : String) =>
                   if p.endsWith ".csv" then (p.dropEnd 4).toString else p
                 | none => "graph"
-            ImportGraph.Unified.NamespaceAggregation.writeNamespaceGraph nsGraph basePath
+            LeanGraph.Unified.NamespaceAggregation.writeNamespaceGraph nsGraph basePath
 
       return {}  -- Return empty for GEXF (unified doesn't support GEXF yet)
 

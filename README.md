@@ -100,11 +100,11 @@ cd /path/to/mathlib4
 
 # Add this repo as a local dependency
 cat >> lakefile.lean << 'EOF'
-require importGraph from "/path/to/import-graph"
+require leanGraph from "/path/to/import-graph"
 EOF
 
 # Build the library
-lake build ImportGraph
+lake build LeanGraph
 ```
 
 ### 2. Generate the graph

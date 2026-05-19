@@ -23,7 +23,7 @@ Currently `lake exe graph output.html` will use the files here to create a stand
 HTML file. It does so by search-replacing the JS-scripts, the `fetch('imports.gexf')`
 statement, and the `<h1>` header.
 
-Therefore any modifications to these lines need to be reflected in `ImportGraph/Cli.lean`!
+Therefore any modifications to these lines need to be reflected in `LeanGraph/Cli.lean`!
 
 # Credits
 

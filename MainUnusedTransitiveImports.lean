@@ -17,8 +17,8 @@ For each module, identifies which other modules are transitively imported
 but not actually used by any declarations.
 -/
 
-public meta import ImportGraph.Lean.WithImportModules
-public meta import ImportGraph.Imports.Unused
+public meta import LeanGraph.Lean.WithImportModules
+public meta import LeanGraph.Imports.Unused
 
 open Lean
 

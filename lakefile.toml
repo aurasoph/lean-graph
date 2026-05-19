@@ -1,9 +1,9 @@
-name = "importGraph"
+name = "leanGraph"
 description = "Tools to analyse and visualise the import structure of Lean packages and their files."
 license = "Apache-2.0"
 licenseFiles = ["LICENSE"]
 
-defaultTargets = ["ImportGraph", "graph"]
+defaultTargets = ["LeanGraph", "graph"]
 
 [[require]]
 name = "Cli"
@@ -11,7 +11,7 @@ scope = "leanprover"
 rev = "v4.29.0"
 
 [[lean_lib]]
-name = "ImportGraph"
+name = "LeanGraph"
 
 # `lake exe graph` constructs import graphs in `.dot` or graphical formats.
 [[lean_exe]]
@@ -41,4 +41,4 @@ root = "MainTest"
 supportInterpreter = true
 
 [[lean_lib]]
-name = "ImportGraphTest"
+name = "LeanGraphTest"

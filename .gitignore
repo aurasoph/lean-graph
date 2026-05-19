@@ -26,8 +26,8 @@ global_corpus.db
 corpus_comparison.txt
 
 # Test artifacts
-ImportGraphTest/FileWithTransitiveImports
-ImportGraphTest/Used
+LeanGraphTest/FileWithTransitiveImports
+LeanGraphTest/Used
 InstanceTest
 graph.pdf
 graph_variants/

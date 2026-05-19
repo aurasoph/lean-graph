@@ -1,7 +1,7 @@
 /-
-Copyright (c) 2024 ImportGraph Contributors. All rights reserved.
+Copyright (c) 2024 LeanGraph Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: ImportGraph Contributors
+Authors: LeanGraph Contributors
 -/
 import Lean
 import Lean.Meta.Basic
@@ -10,9 +10,9 @@ import Lean.Util.PPExt
 import Lean.Class
 import Lean.DocString
 import Lean.Elab.Term
-import ImportGraph.Graph.FilterCommon
-import ImportGraph.Lean.WithImportModules
-import ImportGraph.Util.CurrentModule
+import LeanGraph.Graph.FilterCommon
+import LeanGraph.Lean.WithImportModules
+import LeanGraph.Util.CurrentModule
 
 /-!
 # `lake exe export_statements`
@@ -144,7 +144,7 @@ private def parseArgs (args : List String) : IO (Array Name × String × Bool ×
 def exportStatements (args : List String) : IO UInt32 := do
   let (toRaw, outFile, includeInfra, includeAll, prettyMode) ← parseArgs args
   let to ← if toRaw.isEmpty then
-    pure #[← ImportGraph.getCurrentModule]
+    pure #[← LeanGraph.getCurrentModule]
   else
     pure toRaw
 

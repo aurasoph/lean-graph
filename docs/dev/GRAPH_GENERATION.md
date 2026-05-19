@@ -18,7 +18,7 @@ cd /home/aurasl/projects/lean-graph
 git checkout lean-v4.29
 lake build
 
-# 2. Run from the target project directory (must have importGraph dependency)
+# 2. Run from the target project directory (must have leanGraph dependency)
 cd /home/aurasl/projects/lean-repos/mathlib4
 lake exe graph --mode unified --to Mathlib /path/to/output/unified_graph_new.dot
 
@@ -123,14 +123,14 @@ Mathlib.Data.List,8,31,891,65,8,2
 
 ## Troubleshooting
 
-### Lake complains about importGraph dependency
+### Lake complains about leanGraph dependency
 
-**Error:** `missing package 'ImportGraph'`
+**Error:** `missing package 'LeanGraph'`
 
-**Solution:** Ensure the target project has importGraph declared in its lakefile:
+**Solution:** Ensure the target project has leanGraph declared in its lakefile:
 
 ```lean
-require importGraph from "/path/to/lean-graph"
+require leanGraph from "/path/to/lean-graph"
 ```
 
 And run `lake update` to refresh dependencies.

@@ -8,7 +8,7 @@
   <title>import graph</title>
 
   <!-- NOTE: currently the Lean script searches for these imports to replace them (exact search)!
-       If you modify it, modify the Lean script (ImportGraph/Cli.lean) accordingly! -->
+       If you modify it, modify the Lean script (LeanGraph/Cli.lean) accordingly! -->
   <script src="vendor/sigma.min.js"></script>
   <script src="vendor/graphology.min.js"></script>
   <script src="vendor/graphology-library.min.js"></script>
@@ -542,7 +542,7 @@ var render_gexf = (gexf) => {
 };
 
 // NOTE: currently the Lean script searches for this line to replace it (exact search)!
-// If you modify it, modify the Lean script (ImportGraph/Cli.lean) accordingly!
+// If you modify it, modify the Lean script (LeanGraph/Cli.lean) accordingly!
 fetch("imports.gexf").then((res) => res.text()).then(render_gexf)
 
 container.addEventListener("dragover",  ev => {
