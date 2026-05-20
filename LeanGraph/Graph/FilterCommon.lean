@@ -31,8 +31,9 @@ Four filter categories:
 2. **Structural plumbing** — auto-generated `A.toB` coercions from `extends`, explicitly
    named class hierarchy coercions, and all class projection functions (field accessors
    like `Mul.mul`, `Norm.norm`). Bodies are pure field accesses with no mathematical content.
-3. **Typeclass instances** — filtered pragmatically to avoid noise from instance proof
-   bodies leaking internal lemmas. Use `includeAll := true` to restore.
+3. **Typeclass instances** — kept (both named and anonymous), and tagged with
+   `is_instance: true` on each node. Downstream consumers can filter on that
+   flag instead of having them silently dropped here.
 4. **Tactic internals** — omega/grind/ring/aesop infrastructure. Filtered principally:
    no mathematical content to surface underneath these names.
 
@@ -174,7 +175,9 @@ public def shouldIncludeConstant (env : Environment) (name : Name)
     !(Lean.Meta.getMatcherInfoCore? env name |>.isSome) &&
     !isStructureParentAccessor env name &&
     !isProjectionFn env name &&
-    !isLikelyInstance name &&
+    -- Anonymous instances (matched by `isLikelyInstance`) are kept; they're
+    -- flagged with `is_instance: true` in the node output so downstream
+    -- consumers can filter them out by tag if desired.
     !isTacticInternal name
 
 /-- Like `shouldIncludeConstant` but additionally excludes inductive types,
