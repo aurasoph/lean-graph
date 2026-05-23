@@ -130,6 +130,7 @@ public def writeUnifiedGraphToNdjson
       ("module", Json.str modName),
       ("in_degree", Json.num deg),
       ("is_instance", Json.bool (g.nodeInstances.contains name)),
+      ("is_tactic_object", Json.bool (g.nodeTacticObjects.contains name)),
       ("docstring", Json.str doc),
       ("edges", Json.arr edges)
     ]
