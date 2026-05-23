@@ -14,6 +14,10 @@ import Lean.Structure
 import Lean.Class
 import Lean.DocString
 import Lean.Meta.Instances
+import Lean.Elab.Tactic.Basic
+import Lean.Elab.Term.TermElabM
+import Lean.Elab.Command
+import Lean.Elab.Util
 import LeanGraph.Graph.Structures
 import LeanGraph.Graph.TypeDeps
 import LeanGraph.Graph.ProofDeps
@@ -42,6 +46,68 @@ Edge Types:
 -/
 
 namespace LeanGraph.Unified
+
+/-! ### Tactic-object detection (structural)
+
+`is_tactic_object` is set when any of three structural predicates fire:
+- the declName is registered in `tacticElabAttribute` / `termElabAttribute` /
+  `commandElabAttribute` / `macroAttribute` (it's an elaborator);
+- the type's ultimate conclusion returns one of the elaboration monads
+  (`TacticM`, `TermElabM`, `CommandElabM`, `MacroM`, `MetaM`, `CoreM`, `IO`,
+  `Tactic`, `Macro`);
+- the type's head is a parser/syntax descriptor (`ParserDescr`,
+  `TrailingParserDescr`, `TSyntax`).
+
+This replaces the old `isTacticInternal` namespace-prefix list. Tactic
+infrastructure is *kept* in the graph and flagged; downstream consumers
+filter by tag, per the same precedent set by `is_instance`.
+-/
+
+/-- Collect declNames declared as `tactic` / `term_elab` / `command_elab` / `macro` elaborators. -/
+private def buildElabDeclSet (env : Environment) : Std.HashSet Name := Id.run do
+  let mut s : Std.HashSet Name := {}
+  let tac  := Lean.Elab.Tactic.tacticElabAttribute.ext.getState env
+  let term := Lean.Elab.Term.termElabAttribute.ext.getState env
+  let cmd  := Lean.Elab.Command.commandElabAttribute.ext.getState env
+  let mac  := Lean.Elab.macroAttribute.ext.getState env
+  for n in tac.declNames  do s := s.insert n
+  for n in term.declNames do s := s.insert n
+  for n in cmd.declNames  do s := s.insert n
+  for n in mac.declNames  do s := s.insert n
+  return s
+
+private partial def piBody : Expr → Expr
+  | .forallE _ _ b _ => piBody b
+  | e => e
+
+private def headConstName? : Expr → Option Name
+  | .const n _ => some n
+  | .app f _   => headConstName? f
+  | _ => none
+
+/-- Type's ultimate conclusion returns one of the elaboration monads. -/
+private def returnsElabMonad (info : ConstantInfo) : Bool :=
+  match headConstName? (piBody info.type) with
+  | some n =>
+    n == ``Lean.Elab.Tactic.TacticM ||
+    n == ``Lean.Elab.Term.TermElabM ||
+    n == ``Lean.Elab.Command.CommandElabM ||
+    n == ``Lean.MacroM ||
+    n == ``Lean.Meta.MetaM ||
+    n == ``Lean.CoreM ||
+    n == ``IO ||
+    n == ``Lean.Elab.Tactic.Tactic ||
+    n == ``Lean.Macro
+  | none => false
+
+/-- Type's head is a parser/syntax descriptor. -/
+private def isSyntaxDescr (info : ConstantInfo) : Bool :=
+  match headConstName? (piBody info.type) with
+  | some n =>
+    n == ``Lean.ParserDescr ||
+    n == ``Lean.TrailingParserDescr ||
+    n == ``Lean.TSyntax
+  | none => false
 
 /-- Classify a constant's declaration type -/
 def classifyDeclarationType (env : Environment) (name : Name) : DeclarationType :=
@@ -276,16 +342,21 @@ public def unifiedGraph (env : Environment) (includeAll : Bool := false) : CoreM
     | none => acc.insert name .anonymous
   ) {}
 
-  -- Phase 5: Collect docstrings and instance flags for included nodes
-  IO.eprintln "[Unified] Collecting docstrings..."
+  -- Phase 5: Collect docstrings, instance flags, and tactic-object flags for included nodes
+  IO.eprintln "[Unified] Collecting docstrings, instance + tactic-object metadata..."
+  let elabSet := buildElabDeclSet env
   let mut nodeDocstrings : NameMap String := {}
   let mut nodeInstances : NameSet := {}
+  let mut nodeTacticObjects : NameSet := {}
   for name in allNodes.toList do
     if let some doc ← Lean.findDocString? env name then
       if !doc.isEmpty then
         nodeDocstrings := nodeDocstrings.insert name doc
     if Lean.Meta.isInstanceCore env name then
       nodeInstances := nodeInstances.insert name
+    if let some info := env.find? name then
+      if elabSet.contains name || returnsElabMonad info || isSyntaxDescr info then
+        nodeTacticObjects := nodeTacticObjects.insert name
 
   return {
     nodes := allNodes
@@ -293,6 +364,7 @@ public def unifiedGraph (env : Environment) (includeAll : Bool := false) : CoreM
     nodeModules := nodeModules
     nodeDocstrings := nodeDocstrings
     nodeInstances := nodeInstances
+    nodeTacticObjects := nodeTacticObjects
     extendsEdges := structures.extendsEdges
     fieldEdges := structures.fieldEdges
     signatureEdges := typeDepsGraph
