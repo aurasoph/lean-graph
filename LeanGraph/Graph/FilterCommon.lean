@@ -136,32 +136,15 @@ public def isLikelyInstance (name : Name) : Bool :=
   let s := name.toString
   s.startsWith "inst" || (s.splitOn ".inst").length > 1
 
-/-- Determine if a constant belongs to tactic infrastructure. -/
-public def isTacticInternal (name : Name) : Bool :=
-  (`Lean.Grind).isPrefixOf name ||
-  (`Lean.Omega).isPrefixOf name ||
-  (`Lean.RArray).isPrefixOf name ||
-  (`Lean.Meta).isPrefixOf name ||
-  (`Lean.Elab).isPrefixOf name ||
-  (`Lean.Core).isPrefixOf name ||
-  (`Lean.Server).isPrefixOf name ||
-  (`Lean.Lsp).isPrefixOf name ||
-  (`Int.Linear).isPrefixOf name ||
-  (`Nat.Linear).isPrefixOf name ||
-  (`Nat.ToInt).isPrefixOf name ||
-  (`Mathlib.Tactic).isPrefixOf name ||
-  (`Mathlib.TacticAnalysis).isPrefixOf name ||
-  (`Mathlib.Meta).isPrefixOf name ||
-  (`Std.Internal).isPrefixOf name ||
-  (`Std.Tactic).isPrefixOf name ||
-  (`Std.Sat).isPrefixOf name ||
-  (`Aesop).isPrefixOf name ||
-  (`Qq).isPrefixOf name
-
 /--
 Whether a declaration should appear as a node in the dependency graph.
 
 Pass `includeAll := true` to skip all filtering (exhaustive/debug mode).
+
+Tactic infrastructure (elaborators, macros, parsers, etc.) is *not* filtered
+here. It is tagged via `nodeTacticObjects` (`is_tactic_object` in NDJSON) so
+downstream consumers can filter by tag if desired. See the metadata pass in
+`LeanGraph.Graph.Unified` for the structural predicate.
 -/
 public def shouldIncludeConstant (env : Environment) (name : Name)
     (includeAll : Bool := false) : Bool :=
@@ -174,11 +157,10 @@ public def shouldIncludeConstant (env : Environment) (name : Name)
     !(env.find? name matches some (.recInfo _)) &&
     !(Lean.Meta.getMatcherInfoCore? env name |>.isSome) &&
     !isStructureParentAccessor env name &&
-    !isProjectionFn env name &&
+    !isProjectionFn env name
     -- Anonymous instances (matched by `isLikelyInstance`) are kept; they're
-    -- flagged with `is_instance: true` in the node output so downstream
-    -- consumers can filter them out by tag if desired.
-    !isTacticInternal name
+    -- flagged with `is_instance: true` in the node output.
+    -- Tactic infrastructure is kept; tagged with `is_tactic_object: true`.
 
 /-- Like `shouldIncludeConstant` but additionally excludes inductive types,
 opaque defs, and quotient types from proof dependency graphs (they contribute
@@ -198,8 +180,8 @@ When a dependency is excluded (e.g. a compiler-generated match block), we DFS
 into its body to find the real declarations inside.
 
 Expansion is gated: we do NOT expand through projection functions, structural
-parent accessors, typeclass instances, or tactic internals — these contain no
-mathematical content worth surfacing.
+parent accessors, or typeclass instances — these contain no mathematical
+content worth surfacing.
 -/
 public def applyFiltering (env : Environment) (deps : Array Name)
     (includeAll : Bool := false) (isProof : Bool := false) : CoreM (Array Name) := do
@@ -235,8 +217,7 @@ public def applyFiltering (env : Environment) (deps : Array Name)
         if isProof &&
            !isProjectionFn env dep &&
            !isStructureParentAccessor env dep &&
-           !isLikelyInstance dep &&
-           !isTacticInternal dep then
+           !isLikelyInstance dep then
           if let some info := env.find? dep then
             let subDeps := match info with
               | .thmInfo val  => val.value.getUsedConstants
