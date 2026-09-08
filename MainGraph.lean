@@ -101,7 +101,13 @@ def importGraphCLI (args : Cli.Parsed) : IO UInt32 := do
     if isUnifiedMode then
       let ctx := { options := {}, fileName := "<input>", fileMap := default }
       let state := { env }
-      let unifiedGraph ← Prod.fst <$> (CoreM.toIO (LeanGraph.Unified.unifiedGraph env includeAll) ctx state)
+      -- The raw, unfiltered kernel graph is the default; `--readable` derives the
+      -- filtered view (inclusion filter + expand-through + semantic overlays).
+      let readable := args.hasFlag "readable"
+      let build : CoreM LeanGraph.Types.UnifiedGraph :=
+        if readable then LeanGraph.Unified.unifiedGraph env includeAll
+        else LeanGraph.Unified.rawUnifiedGraph env
+      let unifiedGraph ← Prod.fst <$> (CoreM.toIO build ctx state)
 
       -- Parse --edge-types flag
       let allowedEdgeTypes : Option (Std.HashSet String) :=
@@ -326,6 +332,7 @@ def graph : Cmd := `[Cli|
 
   FLAGS:
     "mode" : String;           "Graph mode: 'imports' (default), 'type-deps'/'blueprint', 'proof-deps'/'logic', 'hierarchy'/'triangles'/'structures', 'unified'."
+    "readable";                "For unified mode: emit the filtered, human-readable view (inclusion filter + expand-through + structure/docref overlays). Default: the raw, unfiltered kernel dependency graph (all constants; faithful getUsedConstants edges)."
     "include-aux";             "EXHAUSTIVE MODE: Include all 308k declarations (auto-generated, private, internal, etc.). Default (without flag): only 46k human-written declarations. Use for: full refactoring scope, compliance audits, or understanding Lean's internals."
     "include-instances";       "Include typeclass instances. Default: exclude (instances create noise and are mechanically derived)."
     "show-transitive";         "Show transitively redundant edges."

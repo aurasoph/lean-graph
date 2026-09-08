@@ -70,15 +70,18 @@ private def collectDeps (e : Expr) (ctx : SigCtx)
   | .mdata _ inner      => collectDeps inner ctx acc
   | _                   => acc  -- bvar, fvar, sort, lit, mvar
 
-private def getTypeDepEdges (_env : Environment) (_name : Name) (info : ConstantInfo) :
-    NameMap SigEdgeMeta :=
-  collectDeps info.type {} {}
+/-- Raw type/signature dependencies of a constant: every constant appearing in its
+type, with per-edge metadata, no filtering and no parent-redirect. -/
+public def rawSigEdges (info : ConstantInfo) : Array (Name × SigEdgeMeta) :=
+  (collectDeps info.type {} {}).toList.toArray
 
-private def filterSigEdges (env : Environment) (edges : NameMap SigEdgeMeta)
+/-- Post-pass filter over raw signature edges: drop constants that fail the
+inclusion check, redirecting each to its meaningful parent when one is included. -/
+public def filterSigEdges (env : Environment) (edges : Array (Name × SigEdgeMeta))
     (includeAll : Bool) : Array (Name × SigEdgeMeta) := Id.run do
   let mut result : Array (Name × SigEdgeMeta) := #[]
   let mut seen : NameSet := {}
-  for (name, em) in edges.toList do
+  for (name, em) in edges do
     if seen.contains name then continue
     if shouldIncludeConstant env name includeAll then
       result := result.push (name, em)
@@ -97,9 +100,7 @@ public def typeDepsGraph (env : Environment) (includeAll : Bool := false) :
   let mut graph : NameMap (Array (Name × SigEdgeMeta)) := {}
   for (name, info) in env.constants.toList do
     if shouldIncludeConstant env name includeAll then
-      let raw  := getTypeDepEdges env name info
-      let deps := filterSigEdges env raw includeAll
-      graph := graph.insert name deps
+      graph := graph.insert name (filterSigEdges env (rawSigEdges info) includeAll)
   return graph
 
 end Lean.Environment
