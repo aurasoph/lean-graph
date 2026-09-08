@@ -25,6 +25,35 @@ For definitions: dependencies from the definition body
 
 namespace Lean.Environment
 
+/--
+Raw value dependencies of a constant: the constants used in its body/value, with
+no filtering and no expand-through. Theorems and definitions use their value's
+`getUsedConstants`; an `irreducible_def` additionally recovers the deps hidden
+behind its opaque wrapper via the auto-generated `{name}_def` sibling theorem.
+Anything without a value (axioms, inductives, constructors, recursors) yields `#[]`.
+-/
+public def valueDeps (env : Environment) (name : Name) (info : ConstantInfo) : Array Name :=
+  match info with
+  | .thmInfo val => val.value.getUsedConstants
+  | .defnInfo val =>
+    -- `irreducible_def` (Mathlib.Tactic.IrreducibleDef) wraps the actual body
+    -- in an opaque Subtype, so val.value is just `Subtype.val wrapped` and
+    -- getUsedConstants returns only the opaque wrapper, not the real body.
+    -- The command also generates a `{name}_def` sibling theorem whose TYPE is
+    -- `name = actual_body_expr`. Walking that type recovers the hidden deps.
+    let direct := val.value.getUsedConstants
+    let irredDeps : Array Name :=
+      match name with
+      | .str pre s =>
+        match env.find? (.str pre (s ++ "_def")) with
+        | some (.thmInfo defLemma) => defLemma.type.getUsedConstants
+        | _ => #[]
+      | _ => #[]
+    (direct ++ irredDeps).toList.eraseDups.toArray
+  | _ => match info.value? with
+    | some v => v.getUsedConstants
+    | none => #[]
+
 private def applyTransitiveClosureChunked (env : Environment) (deps : Array Name)
     (includeAll : Bool := false) : CoreM (Array Name) :=
   applyTransitiveClosureForProofDeps env deps includeAll
@@ -52,25 +81,7 @@ public def proofDepsGraphStreaming (env : Environment)
       skippedCount := skippedCount + 1
       continue
 
-    let deps : Array Name := match info with
-      | .thmInfo val => val.value.getUsedConstants
-      | .defnInfo val =>
-        -- `irreducible_def` (Mathlib.Tactic.IrreducibleDef) wraps the actual body
-        -- in an opaque Subtype, so val.value is just `Subtype.val wrapped` and
-        -- getUsedConstants returns only the opaque wrapper, not the real body.
-        -- The command also generates a `{name}_def` sibling theorem whose TYPE is
-        -- `name = actual_body_expr`. Walking that type recovers the hidden deps.
-        let direct := val.value.getUsedConstants
-        let irredDeps : Array Name :=
-          match name with
-          | .str pre s =>
-            match env.find? (.str pre (s ++ "_def")) with
-            | some (.thmInfo defLemma) => defLemma.type.getUsedConstants
-            | _ => #[]
-          | _ => #[]
-        (direct ++ irredDeps).toList.eraseDups.toArray
-      | .axiomInfo _ => #[]
-      | _ => #[]
+    let deps := valueDeps env name info
 
     let processedDeps ← applyTransitiveClosureForProofDeps env deps includeAll
 
@@ -109,28 +120,9 @@ public def proofDepsGraph (env : Environment) (includeAll : Bool := false) :
       continue
 
     match info with
-    | .thmInfo val =>
-      let deps := val.value.getUsedConstants
-      let processedDeps ← applyTransitiveClosureForProofDeps env deps includeAll
+    | .thmInfo _ | .defnInfo _ | .axiomInfo _ =>
+      let processedDeps ← applyTransitiveClosureForProofDeps env (valueDeps env name info) includeAll
       graph := graph.insert name processedDeps
-    | .defnInfo val =>
-      -- See comment in proofDepsGraphStreaming: recover irreducible_def body deps
-      -- from the auto-generated `{name}_def` sibling theorem's type.
-      let direct := val.value.getUsedConstants
-      let irredDeps : Array Name :=
-        match name with
-        | .str pre s =>
-          match env.find? (.str pre (s ++ "_def")) with
-          | some (.thmInfo defLemma) => defLemma.type.getUsedConstants
-          | _ => #[]
-        | _ => #[]
-      let allDeps := (direct ++ irredDeps).toList.eraseDups.toArray
-      let processedDeps ← applyTransitiveClosureForProofDeps env allDeps includeAll
-      graph := graph.insert name processedDeps
-
-    | .axiomInfo _ =>
-      graph := graph.insert name #[]
-
     | _ =>
       continue
 
