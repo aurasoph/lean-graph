@@ -147,11 +147,14 @@ public def minimalExport (env : Environment) (target : Name) (targetModules : Ar
     (srcRoots : SearchPath) : IO String := do
   let closure := rawClosure env target
   -- Needed declaration ranges, grouped by defining module.
+  -- A module is a target if it equals or lies under one of `targetModules`
+  -- (so `Batteries` matches every `Batteries.*` module; everything else is base).
+  let inTargets := fun (m : Name) => targetModules.any fun t => t == m || t.isPrefixOf m
   let mut neededByModule : NameMap (Array (Position × Position)) := {}
   for n in closure.toList do
     match moduleNameOf env n, Lean.declRangeExt.find? env n with
     | some m, some dr =>
-      if targetModules.contains m then
+      if inTargets m then
         let arr := (neededByModule.find? m).getD #[]
         neededByModule := neededByModule.insert m (arr.push (dr.range.pos, dr.range.endPos))
     | _, _ => pure ()
