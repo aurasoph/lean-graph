@@ -9,6 +9,7 @@ module
 public import LeanGraph.Types
 public import LeanGraph.Export.DotFile
 public import LeanGraph.Export.Gexf
+public import LeanGraph.Export.MinimalLibrary
 public import LeanGraph.Export.ModuleAggregation
 public import LeanGraph.Export.NamespaceAggregation
 public import LeanGraph.Graph.Filter

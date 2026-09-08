@@ -34,6 +34,12 @@ name = "export_statements"
 root = "MainExportStatements"
 supportInterpreter = true
 
+# `lake exe minimal_export` emits a self-contained file with a target's closure.
+[[lean_exe]]
+name = "minimal_export"
+root = "MainMinimalExport"
+supportInterpreter = true
+
 # `lake exe test` runs the comprehensive test suite.
 [[lean_exe]]
 name = "test"
@@ -42,3 +48,10 @@ supportInterpreter = true
 
 [[lean_lib]]
 name = "LeanGraphTest"
+
+# Small Core-Lean-only target for exercising the minimal-library exporter.
+[[lean_lib]]
+name = "TestTarget"
+
+[[lean_lib]]
+name = "TestTarget2"
