@@ -91,6 +91,13 @@ def isNotationLike (cmd : Syntax) : Bool :=
 
 def isDeclaration (cmd : Syntax) : Bool := cmd.isOfKind ``Lean.Parser.Command.declaration
 
+/-- Scope commands (`namespace`/`section`/`end`) are kept verbatim so extracted
+declarations land in their real namespaces and the block structure stays balanced. -/
+def isScopeCommand (cmd : Syntax) : Bool :=
+  cmd.isOfKind ``Lean.Parser.Command.namespace ||
+  cmd.isOfKind ``Lean.Parser.Command.section ||
+  cmd.isOfKind ``Lean.Parser.Command.end
+
 /-- All identifiers mentioned anywhere in a syntax node. -/
 partial def collectIdents (stx : Syntax) (acc : Array Name) : Array Name :=
   match stx with
@@ -98,10 +105,18 @@ partial def collectIdents (stx : Syntax) (acc : Array Name) : Array Name :=
   | .node _ _ args => args.foldl (fun a s => collectIdents s a) acc
   | _ => acc
 
-/-- A notation command is safe to carry only if every constant it references is
-already in the closure; otherwise it would dangle on a name we did not emit. -/
-def notationOk (env : Environment) (closure : NameSet) (cmd : Syntax) : Bool :=
+/-- A command is safe to carry only if every constant it references is already in
+the closure; otherwise it would dangle on a name we did not emit. (Identifiers
+that are not constants — notation tokens, namespaces — are ignored.) -/
+def refsInClosure (env : Environment) (closure : NameSet) (cmd : Syntax) : Bool :=
   (collectIdents cmd #[]).all fun n => !env.contains n || closure.contains n
+
+/-- Scoping/context commands whose effect the extracted source may rely on
+(`variable`/`open`/`set_option`/`universe`/`attribute`). Carried when their
+referenced constants are all in the closure. -/
+def isContextCommand (cmd : Syntax) : Bool :=
+  let k := cmd.getKind.toString
+  ["variable", "Command.open", "set_option", "universe", "Command.attribute"].any (containsSubstr k ·)
 
 /-- Parse a module source into its top-level commands with source spans, using
 `env` so the module's own notation parses correctly. -/
@@ -153,12 +168,15 @@ public def minimalExport (env : Environment) (target : Name) (targetModules : Ar
     -- constructors / projections / recursors / equation lemmas into their command).
     let declSpans := needed.filter fun (ds, de) =>
       !needed.any fun (ps, pe) => strictlyContains ps pe ds de
-    -- Notation / macro / syntax commands from this module.
+    -- Context commands: scope (`namespace`/`section`/`end`) kept verbatim, and
+    -- notation/macro kept when every constant it references is in the closure.
     let parsed ← parseCommands env src path.toString
-    let notationSpans := parsed.filterMap fun (cmd, cs, ce) =>
-      if isNotationLike cmd && notationOk env closure cmd then some (cs, ce) else none
+    let contextSpans := parsed.filterMap fun (cmd, cs, ce) =>
+      if isScopeCommand cmd ||
+         ((isNotationLike cmd || isContextCommand cmd) && refsInClosure env closure cmd)
+      then some (cs, ce) else none
     -- Emit all spans in source order, de-duplicated.
-    let spans := ((declSpans ++ notationSpans).toList.eraseDups).toArray.qsort fun a b =>
+    let spans := ((declSpans ++ contextSpans).toList.eraseDups).toArray.qsort fun a b =>
       posLE a.1 b.1 && (a.1 != b.1 || posLE a.2 b.2)
     for (sp, ep) in spans do
       out := out ++ (sliceByPos src sp ep) ++ "\n\n"

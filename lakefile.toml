@@ -55,3 +55,6 @@ name = "TestTarget"
 
 [[lean_lib]]
 name = "TestTarget2"
+
+[[lean_lib]]
+name = "TestTarget3"
